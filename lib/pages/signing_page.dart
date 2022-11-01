@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:web3dart/crypto.dart';
+import 'package:objective_app2/utils/data.dart';
 
 
 
@@ -13,13 +14,14 @@ class SigningPage extends StatefulWidget {
 }
 
 class _SigningPageState extends State<SigningPage> {
-  var connector, _session, _uri, _signature;
+  var connector, _session, _uri, _data;
 
   @override
   Widget build(BuildContext context) {
     var args = ModalRoute.of(context)!.settings.arguments as List;
     connector = args[0];
     _uri = args[1];
+    _data = args[2];
 
     _session = connector.session;
     print(_session.accounts[0]);
@@ -32,8 +34,15 @@ class _SigningPageState extends State<SigningPage> {
       body: Center(
         child: Column(
           children: [
-            Text('${_signature}'),
+            const Text('Chain Hash:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('${_data.metamaskHash}'),
+            SizedBox(height: 20),
+            const Text('Video Hash:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('${_data.videoHash}'),
+            SizedBox(height: 20),
+            const Text('Signer Address:', style: TextStyle(fontWeight: FontWeight.bold)),
             Text('${_session.accounts[0]}'),
+            SizedBox(height: 40),
             ElevatedButton(
               onPressed: () =>
                 signMessageWithMetamask(
@@ -61,7 +70,7 @@ class _SigningPageState extends State<SigningPage> {
             message: message, address: _session.accounts[0], password: "");
         print(signature);
         setState(() {
-          _signature = signature;
+          _data.metamaskHash = signature;
         });
       } catch (exp) {
         print("Error while signing transaction");
@@ -72,10 +81,11 @@ class _SigningPageState extends State<SigningPage> {
   }
 
   String generateSessionMessage(String accountAddress) {
-    String message = 'Hello $accountAddress, welcome to our app. By signing this message you agree to learn and have fun with blockchain';
-    print(message);
+    // String message = 'Hello $accountAddress, welcome to our app. By signing this message you agree to learn and have fun with blockchain';
+    // print(message);
+    print('hash: $_data.videoHash');
 
-    var hash = keccakUtf8(message);
+    var hash = keccakUtf8(_data.videoHash);
     final hashString = '0x${bytesToHex(hash).toString()}';
 
     return hashString;

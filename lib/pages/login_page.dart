@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:slider_button/slider_button.dart';
 import 'package:walletconnect_secure_storage/walletconnect_secure_storage.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import 'package:objective_app2/utils/data.dart';
 
 
 class LoginPage extends StatefulWidget {
@@ -19,6 +19,8 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   var connector, sessionStorage;
   var _session, _uri;
+
+  var videoData = Data(videoPath: '', videoHash: '', metamaskHash: '');
 
   final storage = new FlutterSecureStorage();
 
@@ -66,6 +68,7 @@ class _LoginPageState extends State<LoginPage> {
               Image.asset(
                 'assets/images/objective_logo.png',
                 fit: BoxFit.fitHeight,
+                height: 200,
               ),
               (_session != null) ? Container(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
@@ -122,13 +125,18 @@ class _LoginPageState extends State<LoginPage> {
                                 ],
                               ),
                             ),
+                            SizedBox(height: 10),
+                            Text('video hash: ${videoData.videoHash}'),
+                            SizedBox(height: 10),
+                            Text('metamask hash: ${videoData.metamaskHash}'),
+                            SizedBox(height: 10),
                             Container(
                               alignment: Alignment.center,
                               child: SliderButton(
                                 action: () async {
-                                  Navigator.pushNamed(context, AppRoutes.signingRoute, arguments: [connector, _uri]);
+                                  Navigator.pushNamed(context, AppRoutes.signingRoute, arguments: [connector, _uri, videoData]);
                                 },
-                                label: const Text('Slide to login'),
+                                label: const Text('Slide to sign some message:)'),
                                 icon: const Icon(Icons.check),
                               ),
                             ),
@@ -141,6 +149,25 @@ class _LoginPageState extends State<LoginPage> {
                                 },
                                 label: const Text('Slide to send video request'),
                                 icon: const Icon(Icons.check),
+                              ),
+                            ),
+                            SizedBox(height: 10),
+                            Container(
+                              alignment: Alignment.center,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  Navigator.pushNamed(context, AppRoutes.recorderRoute, arguments: videoData);
+                                },
+                                child: const Text('Record video'),
+                              ),
+                            ),
+                            Container(
+                              alignment: Alignment.center,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  setState(() {});
+                                },
+                                child: const Text('Refresh'),
                               ),
                             ),
                           ],
