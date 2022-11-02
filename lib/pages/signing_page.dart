@@ -67,7 +67,7 @@ class _SigningPageState extends State<SigningPage> {
         launchUrlString(_uri, mode: LaunchMode.externalApplication);
         print('te');
         var signature = await provider.personalSign(
-            message: message, address: _session.accounts[0], password: "");
+            message: message, address: _session.accounts[0], password: '');
         print(signature);
         setState(() {
           _data.metamaskHash = signature;
@@ -81,13 +81,6 @@ class _SigningPageState extends State<SigningPage> {
   }
 
   String generateSessionMessage(String accountAddress) {
-    // String message = 'Hello $accountAddress, welcome to our app. By signing this message you agree to learn and have fun with blockchain';
-    // print(message);
-    print('hash: $_data.videoHash');
-
-    var hash = keccakUtf8(_data.videoHash);
-    final hashString = '0x${bytesToHex(hash).toString()}';
-
-    return hashString;
+    return 'video hash: ${_data.videoHash}';
   }
 }
