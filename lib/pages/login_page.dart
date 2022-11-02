@@ -7,6 +7,7 @@ import 'package:slider_button/slider_button.dart';
 import 'package:walletconnect_secure_storage/walletconnect_secure_storage.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:objective_app2/utils/data.dart';
+import 'package:geolocator/geolocator.dart';
 
 
 class LoginPage extends StatefulWidget {
@@ -21,6 +22,7 @@ class _LoginPageState extends State<LoginPage> {
   var _session, _uri;
 
   var videoData = Data(videoPath: '', videoHash: '', metamaskHash: '');
+  var videoRequestData = VideoRequestData();
 
   final storage = new FlutterSecureStorage();
 
@@ -54,6 +56,8 @@ class _LoginPageState extends State<LoginPage> {
     if (connector == null) {
       connectToWallet();
     }
+
+    updatePosition();
 
     return Scaffold(
       appBar: AppBar(
@@ -186,6 +190,36 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Future<void> updatePosition() async {
+    var serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      print('location disabled');
+      return Future.error('Location services are disabled.');
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied, next time you could try
+        // requesting permissions again (this is also where
+        // Android's shouldShowRequestPermissionRationale
+        // returned true. According to Android guidelines
+        // your App should show an explanatory UI now.
+        return Future.error('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever, handle appropriately.
+      return Future.error(
+        'Location permissions are permanently denied, we cannot request permissions.');
+    }
+
+    videoData.currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    print(videoData.currentPosition);
+  }
+
   Future<bool> connectToWallet() async {
     print('connect to wallet');
     sessionStorage = WalletConnectSecureStorage();
@@ -197,11 +231,6 @@ class _LoginPageState extends State<LoginPage> {
       _session = __session;
       _uri = __uri;
     });
-
-    print(_session);
-    print(_uri);
-    print(_session.accounts[0]);
-    print(_session.chainId);
 
     connector =  WalletConnect(
       bridge: 'https://bridge.walletconnect.org',
