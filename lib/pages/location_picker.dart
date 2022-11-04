@@ -25,11 +25,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
     Set<Marker> _markers = {};
     late Marker _marker;
-    double _currentMarkerAngle = 0;
-    double _roundedMarkerAngle = 0;
-    double _snapshotMarkerAngle = 0;
     double _mapAngle = 0;
     bool scrolling = false;
+
+    double directionShift = 0;
+    double timeShift = 0;
 
     PickerModes currentMode = PickerModes.location;
 
@@ -55,48 +55,35 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
 
     void calculateRoundedMarkerAngle(BuildContext context) {
-      var widthOfBarSpace = 16;
-      var numberOfBars = (MediaQuery.of(context).size.width / widthOfBarSpace);
-      var discretization = 360 / numberOfBars;
-      var delta = _currentMarkerAngle % discretization;
+      var barSpace = Scale.spaceBetween + Scale.barWidth;
+      var delta = directionShift % (barSpace);
 
-      _roundedMarkerAngle = _currentMarkerAngle - delta;
-      if(delta > discretization / 2) {
-        _roundedMarkerAngle = _currentMarkerAngle + (discretization - delta);
+      var roundedShift = directionShift - delta;
+      if(delta > barSpace / 2) {
+        roundedShift = directionShift + (barSpace - delta);
       }
-      _snapshotMarkerAngle = _currentMarkerAngle;
 
-      animateAngle(_snapshotMarkerAngle, _roundedMarkerAngle, 0);
+      animateShift(roundedShift, 0);
     }
 
-    void animateAngle(double fromAngle, double toAngle, int stepsDone) async {
+    void animateShift(double toShift, int stepsDone) async {
       var stepsOkToDo = 10;
-      if(_currentMarkerAngle == toAngle) {
-        return;
-      }
-
-      if(_snapshotMarkerAngle != fromAngle) {
-        return;
-      }
 
       if(scrolling) {
         return;
       }
 
       if(stepsDone >= stepsOkToDo) {
-        _currentMarkerAngle = toAngle;
+        directionShift = toShift;
         return;
       }
 
       setState(() {
-        if(_currentMarkerAngle < toAngle) {
-          _currentMarkerAngle += (toAngle - _currentMarkerAngle) / (stepsOkToDo - stepsDone);
-        } else {
-          _currentMarkerAngle += (toAngle - _currentMarkerAngle) / (stepsOkToDo - stepsDone);
-        }
+        directionShift += (toShift - directionShift) / (stepsOkToDo - stepsDone);
       });
-      await Future.delayed(Duration(milliseconds: 20));
-      animateAngle(fromAngle, toAngle, stepsDone + 1);
+
+      await Future.delayed(const Duration(milliseconds: 20));
+      animateShift(toShift, stepsDone + 1);
     }
 
     Scaffold buildMainWidget(CameraPosition _kGooglePlex, BuildContext context) {
@@ -117,9 +104,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     print(latlang);
                   },
                   onCameraMove: (position) {
-                    print(position.bearing);
                     _mapAngle = position.bearing;
-                    refreshCameraMarker();
+                    refreshCameraMarker(context);
                   },
                 ),
             ),
@@ -140,7 +126,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               left: 0,
               width: MediaQuery.of(context).size.width,
               child: Container(
-                child: buildDirectionLetters(context),
+                child: CompassLettersCarousel(shift: directionShift, context: context),
                 width: MediaQuery.of(context).size.width,
                 height: 30,
               )
@@ -150,7 +136,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               bottom: 70,
               left: 0,
               width: MediaQuery.of(context).size.width,
-              child: buildScale(context),
+              child: Scale(shift: directionShift, context: context),
             ),
             Positioned(
               bottom: 60,
@@ -162,24 +148,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 color: Colors.yellow,
               )
             ),
-            Positioned(
-              bottom: 60,
-              width: MediaQuery.of(context).size.width,
-              height: 60,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.black.withOpacity(1.0),
-                      Colors.black.withOpacity(0.0),
-                      Colors.black.withOpacity(1.0),
-                    ],
-                  ),
-                )
-              )
-            ),
+            const ScrollPickerShadow(),
             Positioned(
               bottom: 50,
               left: 0,
@@ -189,19 +158,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 onHorizontalDragStart: (details) {
                   scrolling = true;
                   cameraIconSelected = cameraIconPressed;
-                  refreshCameraMarker();
+                  refreshCameraMarker(context);
                   _goToTheMarker();
                 },
                 onHorizontalDragUpdate: (details) {
                   var angleDx = (details.delta.dx / MediaQuery.of(context).size.width) * 360;
-                  _currentMarkerAngle = (_currentMarkerAngle + angleDx) % 360;
+                  directionShift += details.delta.dx;
                   cameraIconSelected = cameraIconPressed;
-                  refreshCameraMarker();
+                  refreshCameraMarker(context);
                 },
                 onHorizontalDragEnd: (details) {
                   scrolling = false;
                   cameraIconSelected = cameraIcon;
-                  refreshCameraMarker();
+                  refreshCameraMarker(context);
                   calculateRoundedMarkerAngle(context);
                 },
               ),
@@ -238,86 +207,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       );
     }
 
-    Widget buildDirectionLetters(BuildContext context) {
-      var letterWidth = 30;
-      var letters = ['S', 'W', 'N', 'E'];
-      var containerWidth = MediaQuery.of(context).size.width;
-      var shift = (_currentMarkerAngle / 360.0) * containerWidth;
-      List<Widget> children = [];
-
-      for(var i = 0; i < 4; i++) {
-          var letter = letters[i];
-          // we can do this cause letters are in order
-          var defaultPosition = i * containerWidth / 4.0;
-          // position of letter after applying shift
-          var position = (defaultPosition + shift - letterWidth / 2.0) % containerWidth;
-          if(position >= 0 && position <= containerWidth - letterWidth) {
-            children.add(
-              Positioned(
-                left: position,
-                top: 0,
-                width: 30,
-                height: 30,
-                child: directionLetter(letter),
-              )
-            );
-          }
-      }
-
-      return Stack(children: children);
-    }
-
-    Widget buildScale(BuildContext context) {
-      var containerWidth = MediaQuery.of(context).size.width;
-      var shift = (_currentMarkerAngle / 360.0) * containerWidth;
-      List<Widget> children = [];
-      var spaceBetween = 15.0;
-      var barWidth = 1.0;
-      var varHeight = 10.0;
-      var maxOffset = containerWidth - barWidth - spaceBetween;
-
-      for(double offset = 0; offset < containerWidth - barWidth; offset += spaceBetween + barWidth) {
-        children.add(
-          Positioned(
-            left: (offset + shift) % containerWidth,
-            top: 0,
-            width: barWidth,
-            height: varHeight,
-            child: Container(
-              width: barWidth,
-              color: Colors.white,
-            )
-          )
-        );
-      }
-
-      return Stack(children: children);
-    }
-
-    Container directionLetter(String letter) {
-      var letterToColor = {
-        'S': Colors.white,
-        'W': Colors.white,
-        'N': Colors.red,
-        'E': Colors.white,
-      };
-
-      return Container(
-        height: 30,
-        width: 30,
-        alignment: Alignment.center,
-        child: Text(
-          letter,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 20,
-            color: letterToColor[letter],
-            // fontWeight: FontWeight.bold,
-          )
-        ),
-      );
-    }
-
   Future<void> _goToTheMarker() async {
     if(_markers.length > 0){
       final GoogleMapController controller = await _controller.future;
@@ -330,11 +219,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
-  void refreshCameraMarker() {
+  void refreshCameraMarker(BuildContext context) {
     if(_markers.isNotEmpty) {
       setState(() {
         _marker = _marker.copyWith(
-          rotationParam: -_currentMarkerAngle - _mapAngle,
+          rotationParam: -(directionShift / MediaQuery.of(context).size.width) * 360,
           positionParam: markerPostion,
           iconParam: cameraIconSelected,
         );
@@ -366,25 +255,168 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           icon: cameraIconSelected,
           draggable: true,
           anchor: const Offset(0.5, 0.5),
-          rotation: _currentMarkerAngle,
+          rotation: -(directionShift / MediaQuery.of(context).size.width) * 360,
           onDragStart: (value) {
             markerPostion = value;
             cameraIconSelected = cameraIconPressed;
-            refreshCameraMarker();
+            refreshCameraMarker(context);
           },
           onDrag: (value) {
             markerPostion = value;
             cameraIconSelected = cameraIconPressed;
-            refreshCameraMarker();
+            refreshCameraMarker(context);
           },
           onDragEnd: ((value) {
             markerPostion = value;
             cameraIconSelected = cameraIcon;
-            refreshCameraMarker();
+            refreshCameraMarker(context);
           })
         );
         _markers.add(_marker);
         setState(() {});
     }
   }
+}
+
+class ScrollPickerShadow extends StatelessWidget {
+  const ScrollPickerShadow({
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 60,
+      width: MediaQuery.of(context).size.width,
+      height: 60,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Colors.black.withOpacity(1.0),
+              Colors.black.withOpacity(0.0),
+              Colors.black.withOpacity(1.0),
+            ],
+          ),
+        )
+      )
+    );
+  }
+}
+
+class CompassLettersCarousel extends StatelessWidget {
+  const CompassLettersCarousel({
+    Key? key,
+    required double shift,
+    required this.context,
+  }) : _shift = shift, super(key: key);
+
+  final double _shift;
+  final BuildContext context;
+
+  @override
+  Widget build(BuildContext context) {
+      var letterWidth = 30;
+      var letters = ['S', 'W', 'N', 'E'];
+      var containerWidth = MediaQuery.of(context).size.width;
+      var effectiveShift = _shift %  containerWidth;
+      List<Widget> children = [];
+
+      for(var i = 0; i < 4; i++) {
+          var letter = letters[i];
+          // we can do this cause letters are in order
+          var defaultPosition = i * containerWidth / 4.0;
+          // position of letter after applying shift
+          var position = (defaultPosition + effectiveShift - letterWidth / 2.0) % containerWidth;
+          if(position >= 0 && position <= containerWidth - letterWidth) {
+            children.add(
+              Positioned(
+                left: position,
+                top: 0,
+                width: 30,
+                height: 30,
+                child: DirectionLetter(letter: letter),
+              )
+            );
+          }
+      }
+
+      return Stack(children: children);
+    }
+}
+
+class DirectionLetter extends StatelessWidget {
+  const DirectionLetter({
+    Key? key,
+    required this.letter,
+  }) : super(key: key);
+
+  final String letter;
+
+  static const Map<String, Color> letterToColor = {
+    'S': Colors.white,
+    'W': Colors.white,
+    'N': Colors.red,
+    'E': Colors.white,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+      var container = Container(
+        height: 30,
+        width: 30,
+        alignment: Alignment.center,
+        child: Text(
+          letter,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 20,
+            color: letterToColor[letter],
+            // fontWeight: FontWeight.bold,
+          )
+        ),
+      );
+      return container;
+    }
+}
+
+class Scale extends StatelessWidget {
+  const Scale({
+    Key? key,
+    required double shift,
+    required this.context,
+  }) : _shift = shift, super(key: key);
+
+  final double _shift;
+  final BuildContext context;
+
+  static const double spaceBetween = 15.0;
+  static const double barWidth = 1.0;
+  static const double barHeight = 10.0;
+
+  @override
+  Widget build(BuildContext context) {
+      var containerWidth = MediaQuery.of(context).size.width;
+      var effectiveShift = _shift % containerWidth;
+      List<Widget> children = [];
+
+      for(double offset = 0; offset < containerWidth - barWidth; offset += spaceBetween + barWidth) {
+        children.add(
+          Positioned(
+            left: (offset + effectiveShift) % containerWidth,
+            top: 0,
+            width: barWidth,
+            height: barHeight,
+            child: Container(
+              width: barWidth,
+              color: Colors.white,
+            )
+          )
+        );
+      }
+
+      return Stack(children: children);
+    }
 }
