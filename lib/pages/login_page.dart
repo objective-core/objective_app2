@@ -174,6 +174,15 @@ class _LoginPageState extends State<LoginPage> {
                                 child: const Text('Refresh'),
                               ),
                             ),
+                            Container(
+                              alignment: Alignment.center,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  Navigator.pushNamed(context, AppRoutes.locationPickerRoute, arguments: videoData);
+                                },
+                                child: const Text('Pick location'),
+                              ),
+                            ),
                           ],
                         ),
                     ]
