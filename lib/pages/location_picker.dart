@@ -26,10 +26,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     Set<Marker> _markers = {};
     late Marker _marker;
     double _currentMarkerAngle = 0;
+    double _roundedMarkerAngle = 0;
+    double _snapshotMarkerAngle = 0;
     double _mapAngle = 0;
+    bool scrolling = false;
 
     PickerModes currentMode = PickerModes.location;
-
 
     var currentLocation, markerPostion;
 
@@ -49,6 +51,55 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
       addMarker();
 
+      return buildMainWidget(_kGooglePlex, context);
+    }
+
+    void calculateRoundedMarkerAngle(BuildContext context) {
+      var widthOfBarSpace = 16;
+      var numberOfBars = (MediaQuery.of(context).size.width / widthOfBarSpace);
+      var discretization = 360 / numberOfBars;
+      var delta = _currentMarkerAngle % discretization;
+
+      _roundedMarkerAngle = _currentMarkerAngle - delta;
+      if(delta > discretization / 2) {
+        _roundedMarkerAngle = _currentMarkerAngle + (discretization - delta);
+      }
+      _snapshotMarkerAngle = _currentMarkerAngle;
+
+      animateAngle(_snapshotMarkerAngle, _roundedMarkerAngle, 0);
+    }
+
+    void animateAngle(double fromAngle, double toAngle, int stepsDone) async {
+      var stepsOkToDo = 10;
+      if(_currentMarkerAngle == toAngle) {
+        return;
+      }
+
+      if(_snapshotMarkerAngle != fromAngle) {
+        return;
+      }
+
+      if(scrolling) {
+        return;
+      }
+
+      if(stepsDone >= stepsOkToDo) {
+        _currentMarkerAngle = toAngle;
+        return;
+      }
+
+      setState(() {
+        if(_currentMarkerAngle < toAngle) {
+          _currentMarkerAngle += (toAngle - _currentMarkerAngle) / (stepsOkToDo - stepsDone);
+        } else {
+          _currentMarkerAngle += (toAngle - _currentMarkerAngle) / (stepsOkToDo - stepsDone);
+        }
+      });
+      await Future.delayed(Duration(milliseconds: 20));
+      animateAngle(fromAngle, toAngle, stepsDone + 1);
+    }
+
+    Scaffold buildMainWidget(CameraPosition _kGooglePlex, BuildContext context) {
       return Scaffold(
         body: Stack(
           children: [
@@ -136,6 +187,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               height: 70,
               child: GestureDetector(
                 onHorizontalDragStart: (details) {
+                  scrolling = true;
                   cameraIconSelected = cameraIconPressed;
                   refreshCameraMarker();
                   _goToTheMarker();
@@ -143,13 +195,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 onHorizontalDragUpdate: (details) {
                   var angleDx = (details.delta.dx / MediaQuery.of(context).size.width) * 360;
                   _currentMarkerAngle = (_currentMarkerAngle + angleDx) % 360;
-                  print('details.delta.dx: ${details.delta.dx}');
                   cameraIconSelected = cameraIconPressed;
                   refreshCameraMarker();
                 },
                 onHorizontalDragEnd: (details) {
+                  scrolling = false;
                   cameraIconSelected = cameraIcon;
                   refreshCameraMarker();
+                  calculateRoundedMarkerAngle(context);
                 },
               ),
             ),
@@ -239,58 +292,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
 
       return Stack(children: children);
-    }
-
-    Positioned buildCustomScroll(BuildContext context) {
-      return Positioned(
-        bottom: 60,
-        left: (_currentMarkerAngle / 360 * MediaQuery.of(context).size.width) % 15,
-        width: MediaQuery.of(context).size.width,
-        height: 20,
-        child: Container(
-          child: const Image(
-            image: const AssetImage('assets/images/bar-tight.png'),
-            repeat: ImageRepeat.repeatX,
-          ),
-        ),
-      );
-    }
-
-    Positioned buildSlider(BuildContext context) {
-      return Positioned(
-            bottom: 0,
-            left: 0,
-            height: 100,
-            width: MediaQuery.of(context).size.width,
-            child: Slider(
-              value: _currentMarkerAngle,
-              max: 180,
-              min: -180,
-              // divisions: 16,
-              label: _currentMarkerAngle.toString() + '°',
-              onChanged: (double value) {
-                _currentMarkerAngle = value;
-                cameraIconSelected = cameraIconPressed;
-
-                refreshCameraMarker();
-
-              },
-              onChangeStart: (value) {
-                _goToTheMarker();
-
-                _currentMarkerAngle = value;
-                cameraIconSelected = cameraIconPressed;
-
-                refreshCameraMarker();
-              },
-              onChangeEnd: (value) {
-                _currentMarkerAngle = value;
-                cameraIconSelected = cameraIcon;
-
-                refreshCameraMarker();
-              },
-            ),
-          );
     }
 
     Container directionLetter(String letter) {
