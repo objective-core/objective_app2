@@ -26,7 +26,7 @@ class _VideoRequestPageState extends State<VideoRequestPage> {
     print(connector);
     print(_uri);
 
-    sendTxViaMetamask(context);
+    sendTxViaMetamask();
 
     return Scaffold(
       appBar: AppBar(
@@ -64,7 +64,7 @@ class _VideoRequestPageState extends State<VideoRequestPage> {
     return contract;
   }
 
-  sendTxViaMetamask(BuildContext context) async {
+  sendTxViaMetamask() async {
       if (connector.connected && _tx == null) {
         try {
           print("Sending transaction");
@@ -97,13 +97,9 @@ class _VideoRequestPageState extends State<VideoRequestPage> {
 
           print('constracting data');
           var data_bytes = function.encodeCall([
-              "1", BigInt.from(lat_int), BigInt.from(long_int), BigInt.from(startTime), BigInt.from(endTime)
+              "1", BigInt.from(lat_int), BigInt.from(long_int), BigInt.from(startTime), BigInt.from(endTime), BigInt.from(45),
           ]);
           print(data_bytes);
-
-          // TODO: how to pack abi?
-          // var data = '4d07fa9f00000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000b000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000006360e67700000000000000000000000000000000000000000000000000000000637028b700000000000000000000000000000000000000000000000000000000000000013100000000000000000000000000000000000000000000000000000000000000';
-          // var data_bytes = data.toUint8List();
 
           EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(connector, chainId: 5);
           launchUrlString(_uri, mode: LaunchMode.externalApplication);

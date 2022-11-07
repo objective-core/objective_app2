@@ -105,27 +105,33 @@
 			},
 			{
 				"indexed": false,
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "lat",
-				"type": "uint256"
+				"type": "uint32"
 			},
 			{
 				"indexed": false,
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "long",
-				"type": "uint256"
+				"type": "uint32"
 			},
 			{
 				"indexed": false,
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "start",
-				"type": "uint256"
+				"type": "uint32"
 			},
 			{
 				"indexed": false,
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "end",
-				"type": "uint256"
+				"type": "uint32"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint8",
+				"name": "direction",
+				"type": "uint8"
 			},
 			{
 				"indexed": false,
@@ -220,24 +226,29 @@
 				"type": "string"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "lat",
-				"type": "uint256"
+				"type": "uint32"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "long",
-				"type": "uint256"
+				"type": "uint32"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "start",
-				"type": "uint256"
+				"type": "uint32"
 			},
 			{
-				"internalType": "uint256",
+				"internalType": "uint32",
 				"name": "end",
-				"type": "uint256"
+				"type": "uint32"
+			},
+			{
+				"internalType": "uint8",
+				"name": "direction",
+				"type": "uint8"
 			}
 		],
 		"name": "submitRequest",
