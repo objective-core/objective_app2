@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-
+import 'dart:typed_data';
 import 'package:async/async.dart';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:convert/convert.dart';
 import 'package:objective_app2/utils/data.dart';
+import 'package:objective_app2/utils/routes.dart';
+import 'package:bs58/bs58.dart';
 
 
 class RecorderPage extends StatefulWidget {
@@ -18,14 +20,14 @@ class RecorderPage extends StatefulWidget {
 class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver {
   late CameraController controller;
   late List<CameraDescription> cameras; 
-  late Data videoData;
+  late Data data;
 
   var isVideoRecording = false;
   var initialized = false;
 
   @override
   Widget build(BuildContext context) {
-    videoData = ModalRoute.of(context)!.settings.arguments as Data;
+    data = ModalRoute.of(context)!.settings.arguments as Data;
 
     return FutureBuilder<bool>(
       future: initCamera(),
@@ -34,36 +36,87 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
           return Stack(
             children: [
               Positioned(
+                top: 100,
+                left: 0,
+                width: MediaQuery.of(context).size.width,
+                height: MediaQuery.of(context).size.height - 220,
                 child: CameraPreview(controller)
               ),
               Positioned(
                 bottom: 20,
-                left: 20,
-                child: Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => takePicture(),
-                      child: const Text('Take Picture'),
+                left: MediaQuery.of(context).size.width / 2 - 40,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  child: RawMaterialButton(
+                    onPressed: () {
+                      if (isVideoRecording) {
+                        stopVideoRecording();
+                      } else {
+                        startVideoRecording();
+                      }
+                    },
+                    elevation: 2.0,
+                    fillColor: Colors.white,
+                    padding: EdgeInsets.all(15.0),
+                    shape: CircleBorder(),
+                    child: Icon(
+                      size: 35.0,
+                      isVideoRecording ? Icons.stop: Icons.circle,
+                      color: isVideoRecording ? Colors.black : Colors.red,
                     ),
-                    SizedBox(width: 20),
-                    (isVideoRecording) ? ElevatedButton(
-                      onPressed: () => stopVideoRecording(),
-                      child: const Text('Stop Recording'),
-                    ) : ElevatedButton(
-                      onPressed: () => startVideoRecording(),
-                      child: const Text('Start Recording'),
-                    ),
-                  ],
+                  ),
                 )
               ),
               Positioned(
-                child: Text(
-                    videoData.videoHash,
-                    textAlign: TextAlign.center,overflow: TextOverflow.visible,
-                    style: const TextStyle(color: Colors.white, fontSize: 20, decoration: TextDecoration.none)
-                ),
-                bottom: 70,
+                bottom: 25,
+                left: 15,
+                width: 70,
+                height: 70,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  child: RawMaterialButton(
+                    onPressed: () {
+                      // Go to map page.
+                      Navigator.pushNamed(context, AppRoutes.locationPickerRoute, arguments: data);
+                    },
+                    elevation: 2.0,
+                    fillColor: Colors.black,
+                    padding: EdgeInsets.all(15.0),
+                    shape: CircleBorder(),
+                    child: const Icon(
+                      size: 30,
+                      Icons.add_shopping_cart ,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
               ),
+              Positioned(
+                bottom: 25,
+                right: 15,
+                width: 70,
+                height: 70,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  child: RawMaterialButton(
+                    onPressed: () {
+                      // Go to map page.
+                    },
+                    elevation: 2.0,
+                    fillColor: Colors.black,
+                    padding: const EdgeInsets.all(15.0),
+                    shape: const CircleBorder(),
+                    child: const Icon(
+                      size: 35,
+                      Icons.attach_money,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              )
             ],
           );
         } else {
@@ -90,6 +143,11 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     try {
       controller.startVideoRecording();
 
+      data.video = Video(
+        startTime: DateTime.now(),
+        position: data.currentPosition!,
+      );
+
       setState(() {
         isVideoRecording = true;
       });
@@ -101,13 +159,16 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   void stopVideoRecording() async {
     try {
       var file = await controller.stopVideoRecording();
-      var path = '/storage/emulated/0/DCIM/Camera/video.mp4';
-      file.saveTo('/storage/emulated/0/DCIM/Camera/video.mp4');
+      var path = '/storage/emulated/0/DCIM/Camera/${file.name}';
+      file.saveTo(path);
 
-      videoData.videoPath = path;
-      videoData.videoHash = (await getFileSha256(path)).toString();
-      
-      print(videoData.videoHash);
+
+      data.video!.path = path;
+      data.video!.hash = await getFileCIDHash(path);
+
+      data.video!.endTime = DateTime.now();
+
+      print('Video CID ${data.video!.hash}');
 
       setState(() {
         isVideoRecording = false;
@@ -117,7 +178,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     }
   }
 
-  Future<Digest> getFileSha256(String path) async {
+  Future<String> getFileCIDHash(String path) async {
     final reader = ChunkedStreamReader(File(path).openRead());
     const chunkSize = 4096;
     var output = AccumulatorSink<Digest>();
@@ -140,7 +201,18 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
     input.close();
 
-    return output.events.single;
+    var hash = output.events.single.toString();
+
+    var sample = 'QmV7ScvVnx5fMoyAycAAT8DybKn2K8a93SVVAx1GFAVu8E';
+
+    print(hex.encode(base58.decode(sample)));
+
+    // https://ethereum.stackexchange.com/questions/44506/ipfs-hash-algorithm
+    var prefix = '1220';
+    var combined = prefix + hash;
+
+    var cidHash = base58.encode(Uint8List.fromList(hex.decode(combined)));
+    return cidHash;
   }
 
   Future<bool> initCamera() async {

@@ -18,19 +18,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  var connector, sessionStorage;
-  var _session, _uri;
+  var sessionStorage;
+  var _session;
 
-  var videoData = Data(videoPath: '', videoHash: '', metamaskHash: '');
-  var videoRequestData = VideoRequestData();
-
+  var data = Data();
   final storage = new FlutterSecureStorage();
 
   loginUsingMetamask(BuildContext context) async {
-    if (!connector.connected) {
+    if (!data.connector!.connected) {
       try {
-        var session = await connector.createSession(onDisplayUri: (uri) async {
-          _uri = uri;
+        var session = await data.connector!.createSession(onDisplayUri: (uri) async {
+          data.connectionUri = uri;
           await storage.write(key: 'wc-uri', value: uri);
           await launchUrlString(uri, mode: LaunchMode.externalApplication);
         });
@@ -43,8 +41,8 @@ class _LoginPageState extends State<LoginPage> {
         print(exp);
       }
     } else {
-      _session = connector.session;
-      _uri = await storage.read(key: 'wc-uri');
+      _session = data.connector!.session;
+      data.connectionUri = await storage.read(key: 'wc-uri');
       print("already connected");
     }
   }
@@ -53,7 +51,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     print('buiding');
     // spawn a new connector;
-    if (connector == null) {
+    if (data.connector == null) {
       connectToWallet();
     }
 
@@ -130,37 +128,22 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             SizedBox(height: 10),
-                            Text('video hash: ${videoData.videoHash}'),
-                            SizedBox(height: 10),
-                            Text('metamask hash: ${videoData.metamaskHash}'),
-                            SizedBox(height: 10),
-                            Container(
+                            data.video != null ? Container(
                               alignment: Alignment.center,
-                              child: SliderButton(
-                                action: () async {
-                                  Navigator.pushNamed(context, AppRoutes.signingRoute, arguments: [connector, _uri, videoData]);
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  Navigator.pushNamed(context, AppRoutes.signingRoute, arguments: data);
                                 },
-                                label: const Text('Slide to sign some message:)'),
-                                icon: const Icon(Icons.check),
+                                child: const Text('Sign video'),
                               ),
-                            ),
-                            SizedBox(height: 10),
-                            Container(
-                              alignment: Alignment.center,
-                              child: SliderButton(
-                                action: () async {
-                                  Navigator.pushNamed(context, AppRoutes.videoRequestRoute, arguments: [connector, _uri]);
-                                },
-                                label: const Text('Slide to send video request'),
-                                icon: const Icon(Icons.check),
-                              ),
-                            ),
+                            ) : Text('To sign video, please record it first.'),
                             SizedBox(height: 10),
                             Container(
                               alignment: Alignment.center,
                               child: ElevatedButton(
                                 onPressed: () async {
-                                  Navigator.pushNamed(context, AppRoutes.recorderRoute, arguments: videoData);
+                                  await Navigator.pushNamed(context, AppRoutes.recorderRoute, arguments: data);
+                                  setState(() {});
                                 },
                                 child: const Text('Record video'),
                               ),
@@ -169,16 +152,8 @@ class _LoginPageState extends State<LoginPage> {
                               alignment: Alignment.center,
                               child: ElevatedButton(
                                 onPressed: () async {
+                                  await Navigator.pushNamed(context, AppRoutes.locationPickerRoute, arguments: data);
                                   setState(() {});
-                                },
-                                child: const Text('Refresh'),
-                              ),
-                            ),
-                            Container(
-                              alignment: Alignment.center,
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  Navigator.pushNamed(context, AppRoutes.locationPickerRoute, arguments: videoData);
                                 },
                                 child: const Text('Pick location'),
                               ),
@@ -225,8 +200,8 @@ class _LoginPageState extends State<LoginPage> {
         'Location permissions are permanently denied, we cannot request permissions.');
     }
 
-    videoData.currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    print(videoData.currentPosition);
+    data.currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    print(data.currentPosition);
   }
 
   Future<bool> connectToWallet() async {
@@ -234,14 +209,14 @@ class _LoginPageState extends State<LoginPage> {
     sessionStorage = WalletConnectSecureStorage();
 
     var __session = await sessionStorage.getSession();
-    var __uri = await storage.read(key: 'wc-uri');
+    var uri = await storage.read(key: 'wc-uri');
 
     setState(() {
       _session = __session;
-      _uri = __uri;
+      data.connectionUri = uri;
     });
 
-    connector =  WalletConnect(
+    data.connector =  WalletConnect(
       bridge: 'https://bridge.walletconnect.org',
       session: _session,
       sessionStorage: sessionStorage,
@@ -254,20 +229,20 @@ class _LoginPageState extends State<LoginPage> {
         ])
     );
 
-    connector.on(
+    data.connector!.on(
         'connect',
         (session) => setState(
               () {
                 _session = session;
               },
             ));
-    connector.on(
+    data.connector!.on(
         'session_update',
         (payload) => setState(() {
               _session = payload;
               print(payload);
             }));
-    connector.on(
+    data.connector!.on(
         'disconnect',
         (payload) => setState(() {
               _session = null;

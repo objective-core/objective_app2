@@ -46,6 +46,7 @@ dependencies:
   camera: ^0.10.0+4
   geolocator: ^9.0.2
   map_location_picker: ^1.0.2
+  bs58: ^1.0.2
 
 dev_dependencies:
   flutter_test:

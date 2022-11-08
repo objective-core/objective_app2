@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:walletconnect_dart/walletconnect_dart.dart';
-import 'package:url_launcher/url_launcher_string.dart';
-import 'package:web3dart/web3dart.dart';
 import 'package:flutter/services.dart';
+import 'package:objective_app2/utils/data.dart';
 
+import 'package:walletconnect_dart/walletconnect_dart.dart';
+import 'package:web3dart/web3dart.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'dart:typed_data';
 
 
@@ -15,16 +16,13 @@ class VideoRequestPage extends StatefulWidget {
 }
 
 class _VideoRequestPageState extends State<VideoRequestPage> {
-  var connector, _uri, _tx;
+  var _tx;
+
+  late Data data;
 
   @override
   Widget build(BuildContext context) {
-    var args = ModalRoute.of(context)!.settings.arguments as List;
-    connector = args[0];
-    _uri = args[1];
-
-    print(connector);
-    print(_uri);
+    data = ModalRoute.of(context)!.settings.arguments as Data;
 
     sendTxViaMetamask();
 
@@ -36,7 +34,7 @@ class _VideoRequestPageState extends State<VideoRequestPage> {
         child: Column(
           children: [
             Text('TX ID: ${_tx}'),
-            Text('Wallet: ${connector.session.accounts[0]}'),
+            Text('Wallet: ${data.connector!.session.accounts[0]}'),
           ],
         )
       ),
@@ -65,56 +63,57 @@ class _VideoRequestPageState extends State<VideoRequestPage> {
   }
 
   sendTxViaMetamask() async {
-      if (connector.connected && _tx == null) {
+      if (data.connector!.connected && _tx == null) {
         try {
           print("Sending transaction");
 
-          // TODO: get actual values
-          // 41.015137
-          // 51.191042
-          var lat = 41.0151371;
-          var long = 51.19104241;
+          // data.request = VideoRequestData(
+          //   direction: data.currentPosition!.heading, // sbould be median direction
+          //   latitude: data.currentPosition!.latitude,
+          //   longitude: data.currentPosition!.longitude,
+          //   startTimestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          //   secondsDuration: 60,
+          // );
 
-          // using constant precision here, not sure if that's correct.
-          var lat_int = (lat * 1000000).toInt();
-          var long_int = (long * 1000000).toInt();
+          print(data.request!.getIntegerDirection());
+          print(data.request!.getIntegerLatitude());
+          print(data.request!.getIntegerLongitude());
+          print(data.request!.startTimestamp);
+          print(data.request!.getIntegerEndTimestamp());
 
-          // default is 1 hour.
-          var startTime = (DateTime.now().millisecondsSinceEpoch / 1000).toInt();
-          var endTime = startTime + 3600;
-
-          var function_address = '4d07fa9f';
+          var function_address = 'd8484ca7';
           var requestId = 1;
-
-          var data = function_address +
-              toHex(lat_int) +
-              toHex(long_int) +
-              toHex(startTime) +
-              toHex(endTime);
+          var contractAddress = '0xa8cbf99c7ea18a8e6a2ea34619609a0aa9e77211';
 
           DeployedContract contract = await getContract();
           ContractFunction function = contract.function("submitRequest");
 
           print('constracting data');
           var data_bytes = function.encodeCall([
-              "1", BigInt.from(lat_int), BigInt.from(long_int), BigInt.from(startTime), BigInt.from(endTime), BigInt.from(45),
+              "1",
+              BigInt.from(data.request!.getIntegerLatitude()),
+              BigInt.from(data.request!.getIntegerLongitude()),
+              BigInt.from(data.request!.startTimestamp),
+              BigInt.from(data.request!.getIntegerEndTimestamp()),
+              BigInt.from(data.request!.getIntegerDirection()),
           ]);
           print(data_bytes);
 
-          EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(connector, chainId: 5);
-          launchUrlString(_uri, mode: LaunchMode.externalApplication);
+          EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(data.connector!, chainId: 5);
+          launchUrlString(data.connectionUri!, mode: LaunchMode.externalApplication);
 
           var tx = await provider.sendTransaction(
-            from: connector.session!.accounts[0],
-            to: '0xe011ea99393aab86e59fd57ff4dbb48825e36290',
+            from: data.connector!.session.accounts[0],
+            to: contractAddress,
             value: EtherAmount.fromUnitAndValue(EtherUnit.finney, BigInt.from(1)).getInWei,
             gasPrice: EtherAmount.fromUnitAndValue(EtherUnit.gwei, BigInt.from(100)).getInWei, // get gas price estimation from somewhere.
-            gas: 90000, // default: 90000
+            gas: 150000, // default: 90000
             data: data_bytes,
           );
 
           print(tx);
           setState(() {
+            data.request!.txHash = tx;
             _tx = tx;
           });
         } catch (exp) {

@@ -3,6 +3,8 @@ import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:web3dart/crypto.dart';
 import 'package:objective_app2/utils/data.dart';
+import 'package:objective_app2/utils/data.dart';
+import 'package:http/http.dart' as http;
 
 
 
@@ -14,18 +16,14 @@ class SigningPage extends StatefulWidget {
 }
 
 class _SigningPageState extends State<SigningPage> {
-  var connector, _session, _uri, _data;
+  late Data data;
 
   @override
   Widget build(BuildContext context) {
-    var args = ModalRoute.of(context)!.settings.arguments as List;
-    connector = args[0];
-    _uri = args[1];
-    _data = args[2];
+    data = ModalRoute.of(context)!.settings.arguments as Data;
 
-    _session = connector.session;
-    print(_session.accounts[0]);
-    print(_uri);
+    print(data.connector!.session);
+    print(data.connectionUri);
 
     return Scaffold(
       appBar: AppBar(
@@ -35,19 +33,19 @@ class _SigningPageState extends State<SigningPage> {
         child: Column(
           children: [
             const Text('Chain Hash:', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('${_data.metamaskHash}'),
+            Text('${data.video!.signature}'),
             SizedBox(height: 20),
             const Text('Video Hash:', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('${_data.videoHash}'),
+            Text('${data.video!.hash}'),
             SizedBox(height: 20),
             const Text('Signer Address:', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('${_session.accounts[0]}'),
+            Text(data.connector!.session.accounts[0]),
             SizedBox(height: 40),
             ElevatedButton(
               onPressed: () =>
                 signMessageWithMetamask(
                   context,
-                  generateSessionMessage(_session.accounts[0])),
+                  generateSessionMessage(data.connector!.session.accounts[0])),
               child: const Text('Sign Message'),
             ),
           ],
@@ -57,21 +55,23 @@ class _SigningPageState extends State<SigningPage> {
   }
 
   signMessageWithMetamask(BuildContext context, String message) async {
-    if (connector.connected) {
+    if (data.connector!.connected) {
       try {
         print("Message received");
         print(message);
 
         EthereumWalletConnectProvider provider =
-            EthereumWalletConnectProvider(connector);
-        launchUrlString(_uri, mode: LaunchMode.externalApplication);
-        print('te');
+            EthereumWalletConnectProvider(data.connector!);
+        launchUrlString(data.connectionUri!, mode: LaunchMode.externalApplication);
+
         var signature = await provider.personalSign(
-            message: message, address: _session.accounts[0], password: '');
+            message: message, address: data.connector!.session.accounts[0], password: '');
         print(signature);
         setState(() {
-          _data.metamaskHash = signature;
+          data.video!.signature = signature;
         });
+
+        uploadVideo();
       } catch (exp) {
         print("Error while signing transaction");
         print(exp);
@@ -80,7 +80,47 @@ class _SigningPageState extends State<SigningPage> {
     }
   }
 
+  uploadVideo() async {
+    // curl -v \
+    // -F lat=12 \
+    // -F long=12 \
+    // -F start=123123 \
+    // -F end=123140 \
+    // -F median_direction=12 \
+    // -F signature=test \
+    // -F request_id=test-request-id-1 \
+    // -F expected_hash=QmNT8axScpvoXJeKaoeZcD7E9ew9eSNp4EePXjwB62mrv4 \
+    // -F file=@requirements.in \
+    // https://api.objective.camera/upload/
+
+    var url = Uri.https('api.objective.camera', 'upload/');
+    print(url);
+    var request = http.MultipartRequest("POST", url);
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        data.video!.path!,
+      )
+    );
+    request.fields.addAll({
+      'lat': data.currentPosition!.latitude.toString(),
+      'long': data.currentPosition!.longitude.toString(),
+      'start': data.video!.startTime.millisecondsSinceEpoch.toString(),
+      'end': data.video!.endTime!.millisecondsSinceEpoch.toString(),
+      'median_direction': data.currentPosition!.heading.truncate().toString(),
+      'signature': data.video!.signature!,
+      'request_id': 'реквест айди',
+      'expected_hash': data.video!.hash!,
+    });
+
+    request.send().then((response) async {
+      print(response.statusCode);
+      print(await response.stream.bytesToString());
+    });
+  }
+
   String generateSessionMessage(String accountAddress) {
-    return 'video hash: ${_data.videoHash}';
+    return 'video hash: ${data.video!.hash}';
   }
 }
