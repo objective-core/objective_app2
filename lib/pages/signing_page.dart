@@ -98,30 +98,7 @@ class _SigningPageState extends State<SigningPage> {
 
     var url = Uri.https('api.objective.camera', 'upload/');
     var request = http.MultipartRequest("POST", url);
-    var authorizationToken = base64Encode('App:chainlink2020'.codeUnits);
-
-    var uploadFile = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        data.video!.path!,
-      ),
-    });
-
-    Response dioResponse = await dio.post(
-      'https://ipfs.objective.camera/api/v0/add',
-      data: uploadFile,
-      options: Options(
-        headers: {
-          "Authorization": "Basic $authorizationToken",
-        },
-      ),
-      onSendProgress: (received, total) {
-        if (total != -1) {
-          print((received / total * 100).toStringAsFixed(0) + '%');
-        }
-      },
-    );
-
-    var expectedHash = dioResponse.data['Hash'];
+    var expectedHash = await uploadToIpfs();
 
     print('expected hash: $expectedHash, calculated hash: ${data.video!.hash!}');
 
@@ -146,6 +123,34 @@ class _SigningPageState extends State<SigningPage> {
       print(response.statusCode);
       print(await response.stream.bytesToString());
     });
+  }
+
+  Future<dynamic> uploadToIpfs() async {
+    var authorizationToken = base64Encode('App:chainlink2020'.codeUnits);
+
+    var uploadFile = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        data.video!.path!,
+      ),
+    });
+
+    Response dioResponse = await dio.post(
+      'https://ipfs.objective.camera/api/v0/add',
+      data: uploadFile,
+      options: Options(
+        headers: {
+          "Authorization": "Basic $authorizationToken",
+        },
+      ),
+      onSendProgress: (received, total) {
+        if (total != -1) {
+          print((received / total * 100).toStringAsFixed(0) + '%');
+        }
+      },
+    );
+
+    var expectedHash = dioResponse.data['Hash'];
+    return expectedHash;
   }
 
   String generateSessionMessage(String accountAddress) {
