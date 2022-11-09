@@ -12,6 +12,7 @@ import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:web3dart/web3dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:dio/dio.dart';
+import 'package:label_marker/label_marker.dart';
 
 
 class LocationPickerPage extends StatefulWidget {
@@ -22,7 +23,7 @@ class LocationPickerPage extends StatefulWidget {
 }
 
 enum PickerModes{
-  location, period
+  location, period, videoRequest
 }
 
 class _LocationPickerPageState extends State<LocationPickerPage> {
@@ -33,6 +34,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     Dio dio = Dio();
 
     Set<Marker> _markers = {};
+    Set<Marker> _videoRequetsMarkers = {};
+    List<VideoRequestFromServer> _videoRequests = [];
     late Marker _marker;
 
     double _mapAngle = 0;
@@ -105,19 +108,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     refreshCameraMarker(context);
                   },
                 ),
-            ),
-            Positioned(
-              bottom: 130,
-              right: 10,
-              height: 20,
-              width: 200,
-              child: Container(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${selectedTimeString(context)}',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(color: Colors.white, fontSize: 15),),
-              )
             ),
             Positioned(
               bottom: 0,
@@ -194,7 +184,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     color: currentMode == PickerModes.location? Colors.yellow : Colors.white,
                     iconSize: 50,
                     onPressed: () {
-                      print('pressed');
                       setState(() {
                         currentMode = PickerModes.location;
                       });
@@ -206,7 +195,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     highlightColor: Colors.white,
                     iconSize: 50,
                     onPressed: () {
-                      print('pressed');
                       setState(() {
                         currentMode = PickerModes.period;
                       });
@@ -294,14 +282,19 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           iconParam: cameraIconSelected,
         );
         _markers = {_marker};
+        _markers.addAll(_videoRequetsMarkers);
       });
     }
+  }
+
+  Duration calculateSelectedShift(BuildContext context) {
+    return Duration(minutes: (-timeShift ~/ ((MediaQuery.of(context).size.width / 16)).round()) * 15);
   }
 
   DateTime calculateSelectedTime(BuildContext context) {
     DateTime now = DateTime.now();
     now = DateTime(now.year, now.month, now.day, now.hour);
-    DateTime time = now.add(Duration(minutes: (-timeShift ~/ ((MediaQuery.of(context).size.width / 16)).round()) * 15));
+    DateTime time = now.add(calculateSelectedShift(context));
     return time;
   }
 
@@ -323,9 +316,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           secondsDuration: 3600,
         );
 
-        var requests = await getRequests();
-        print(requests);
-
         cameraIcon = await BitmapDescriptor.fromAssetImage(
           const ImageConfiguration(size: Size(48, 48)),
           'assets/images/camera.png'
@@ -338,7 +328,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
         markerPostion = currentLocation;
         var angle = -(directionShift / MediaQuery.of(context).size.width) * 360;
-        print(angle);
+
         _marker = Marker(
           // This marker id can be anything that uniquely identifies each marker.
           markerId: MarkerId('video_location'),
@@ -368,6 +358,67 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         );
         _markers.add(_marker);
         setState(() {});
+
+        await refreshVideoRequests();
+        buildVideoRequestsMarkers(context);
+
+        _markers.addAll(_videoRequetsMarkers);
+        setState(() {});
+    }
+  }
+
+  Future<void> refreshVideoRequests() async {
+    // lets request the rest of markers
+    _videoRequests = await getRequests();
+  }
+
+  buildVideoRequestsMarkers(BuildContext context) {
+    for(var i = 0; i < _videoRequests.length; i++) {
+      VideoRequestFromServer request = _videoRequests[i];
+
+      String price = 'Ξ${request.reward.toDouble() / 1000000000000000000.toDouble()}';
+
+      Duration selectedTimeShift = calculateSelectedShift(context);
+      DateTime now = DateTime.now().add(selectedTimeShift);
+
+      Duration timeToStart = Duration(milliseconds: request.startTime.millisecondsSinceEpoch - now.millisecondsSinceEpoch);
+      Duration timeLeft = Duration(milliseconds: request.endTime.millisecondsSinceEpoch - now.millisecondsSinceEpoch);
+      bool timeWindowPassed = timeLeft.isNegative;
+      bool started = timeToStart.isNegative;
+      bool captured = request.thumbnail != '';
+
+      var color = Colors.blue;
+      var message = '$price in ${timeToStart.inMinutes} mins';
+      if(timeToStart.inMinutes > 60) {
+        message = '$price in ${timeToStart.inHours} hours';
+      }
+
+      if(timeToStart.inHours > 24) {
+        message = '$price in ${timeToStart.inDays} days';
+      }
+
+      if(captured) {
+        message = '$price (captured)';
+        color = Colors.yellow;
+      } else if(timeWindowPassed) {
+        message = '$price (expired)';
+        color = Colors.grey;
+      } else if(started) {
+        if(started) {
+          message = '$price ${timeLeft.inMinutes} mins left';
+          color = timeLeft.inMinutes > 10 ? Colors.green : Colors.red;
+        }
+      }
+
+      var marker = LabelMarker(
+        label: message,
+        markerId: MarkerId('video_location_${request.requestId}'),
+        position: LatLng(request.latitude, request.longitude),
+        backgroundColor: color,
+        icon: cameraIcon,
+      );
+
+      _videoRequetsMarkers.addLabelMarker(marker);
     }
   }
 
@@ -439,26 +490,25 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
   }
 
-  Future<List<VideoRequestData>> getRequests() async {
+  Future<List<VideoRequestFromServer>> getRequests() async {
     Response dioResponse = await dio.get(
       'https://api.objective.camera/requests',
     );
 
     var requests = dioResponse.data['requests'];
-    List<VideoRequestData> result = [];
+    List<VideoRequestFromServer> result = [];
 
     for(var i = 0; i < requests.length; i++) {
       var request = requests[i];
-      result.add(VideoRequestData(
+      result.add(VideoRequestFromServer(
         direction: (request['location']['direction']).toDouble(),
         latitude: request['location']['lat'],
         longitude: request['location']['long'],
-        startTimestamp: DateTime.parse(request['start_time']).millisecondsSinceEpoch ~/ 1000,
-        secondsDuration: (
-          DateTime.parse(request['end_time']).millisecondsSinceEpoch
-          - DateTime.parse(request['start_time']).microsecondsSinceEpoch
-        ) ~/ 1000,
-        txHash: request['id'],
+        startTime: DateTime.parse(request['start_time'] + 'Z'),
+        endTime: DateTime.parse(request['end_time'] + 'Z'),
+        requestId: request['id'],
+        reward: request['reward'],
+        thumbnail: request['video'] == null ? '' : 'https://i.picsum.photos/id/182/200/100.jpg?hmac=nuni_xT1TfXyyqbAcn1bG1oAXfba-QH6lW1zNDDgKDs',
       ));
     }
     return result;

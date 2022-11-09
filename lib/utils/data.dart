@@ -3,6 +3,29 @@ import 'package:map_location_picker/map_location_picker.dart';
 import 'package:walletconnect_dart/walletconnect_dart.dart';
 
 
+class VideoRequestFromServer {
+  double latitude;
+  double longitude;
+  int reward;
+  String requestId;
+  double direction;
+  DateTime startTime;
+  DateTime endTime;
+  String thumbnail; // if null -> no video
+
+  VideoRequestFromServer({
+    required this.latitude,
+    required this.longitude,
+    required this.reward,
+    required this.requestId,
+    required this.direction,
+    required this.startTime,
+    required this.endTime,
+    this.thumbnail = '',
+  });
+}
+
+
 class VideoRequestData {
   double latitude;
   double longitude;
