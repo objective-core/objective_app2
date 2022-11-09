@@ -8,6 +8,7 @@ import 'package:convert/convert.dart';
 import 'package:objective_app2/utils/data.dart';
 import 'package:objective_app2/utils/routes.dart';
 import 'package:bs58/bs58.dart';
+import 'package:fast_base58/fast_base58.dart' as fast_base58;
 
 
 class RecorderPage extends StatefulWidget {
@@ -203,15 +204,13 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
     var hash = output.events.single.toString();
 
-    var sample = 'QmV7ScvVnx5fMoyAycAAT8DybKn2K8a93SVVAx1GFAVu8E';
-
-    print(hex.encode(base58.decode(sample)));
-
     // https://ethereum.stackexchange.com/questions/44506/ipfs-hash-algorithm
     var prefix = '1220';
     var combined = prefix + hash;
 
     var cidHash = base58.encode(Uint8List.fromList(hex.decode(combined)));
+    var fastCidHash = fast_base58.Base58Encode(hex.decode(combined));
+    print('cidHash: $cidHash, fastCidHash: $fastCidHash');
     return cidHash;
   }
 

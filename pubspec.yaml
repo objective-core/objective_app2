@@ -47,6 +47,8 @@ dependencies:
   geolocator: ^9.0.2
   map_location_picker: ^1.0.2
   bs58: ^1.0.2
+  dio: ^4.0.6
+  fast_base58: ^0.2.1
 
 dev_dependencies:
   flutter_test:

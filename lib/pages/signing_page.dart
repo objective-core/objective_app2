@@ -5,7 +5,9 @@ import 'package:web3dart/crypto.dart';
 import 'package:objective_app2/utils/data.dart';
 import 'package:objective_app2/utils/data.dart';
 import 'package:http/http.dart' as http;
-
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
 
 
 class SigningPage extends StatefulWidget {
@@ -17,6 +19,7 @@ class SigningPage extends StatefulWidget {
 
 class _SigningPageState extends State<SigningPage> {
   late Data data;
+  Dio dio = Dio();
 
   @override
   Widget build(BuildContext context) {
@@ -94,8 +97,33 @@ class _SigningPageState extends State<SigningPage> {
     // https://api.objective.camera/upload/
 
     var url = Uri.https('api.objective.camera', 'upload/');
-    print(url);
     var request = http.MultipartRequest("POST", url);
+    var authorizationToken = base64Encode('App:chainlink2020'.codeUnits);
+
+    var uploadFile = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        data.video!.path!,
+      ),
+    });
+
+    Response dioResponse = await dio.post(
+      'https://ipfs.objective.camera/api/v0/add',
+      data: uploadFile,
+      options: Options(
+        headers: {
+          "Authorization": "Basic $authorizationToken",
+        },
+      ),
+      onSendProgress: (received, total) {
+        if (total != -1) {
+          print((received / total * 100).toStringAsFixed(0) + '%');
+        }
+      },
+    );
+
+    var expectedHash = dioResponse.data['Hash'];
+
+    print('expected hash: $expectedHash, calculated hash: ${data.video!.hash!}');
 
     request.files.add(
       await http.MultipartFile.fromPath(
@@ -110,8 +138,8 @@ class _SigningPageState extends State<SigningPage> {
       'end': data.video!.endTime!.millisecondsSinceEpoch.toString(),
       'median_direction': data.currentPosition!.heading.truncate().toString(),
       'signature': data.video!.signature!,
-      'request_id': 'реквест айди',
-      'expected_hash': data.video!.hash!,
+      'request_id': 'test-request-id-8',
+      'expected_hash': expectedHash,
     });
 
     request.send().then((response) async {

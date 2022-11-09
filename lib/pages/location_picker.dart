@@ -11,7 +11,6 @@ import 'package:web3dart/web3dart.dart';
 import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:web3dart/web3dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-import 'dart:typed_data';
 
 
 class LocationPickerPage extends StatefulWidget {
@@ -230,8 +229,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                     });
                   }
                 ),
-              ) :
-            (
+            ) : (
               !locationConfirmed ? Positioned(
                 top: 40,
                 right: 10,
