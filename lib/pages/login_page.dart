@@ -3,7 +3,6 @@ import 'package:objective_app2/utils/routes.dart';
 import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:slider_button/slider_button.dart';
 import 'package:walletconnect_secure_storage/walletconnect_secure_storage.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:objective_app2/utils/data.dart';
@@ -127,16 +126,6 @@ class _LoginPageState extends State<LoginPage> {
                                 ],
                               ),
                             ),
-                            SizedBox(height: 10),
-                            data.video != null ? Container(
-                              alignment: Alignment.center,
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  Navigator.pushNamed(context, AppRoutes.signingRoute, arguments: data);
-                                },
-                                child: const Text('Sign video'),
-                              ),
-                            ) : Text('To sign video, please record it first.'),
                             SizedBox(height: 10),
                             Container(
                               alignment: Alignment.center,

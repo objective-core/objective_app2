@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:objective_app2/utils/routes.dart';
 import 'package:objective_app2/pages/login_page.dart';
-import 'package:objective_app2/pages/signing_page.dart';
-import 'package:objective_app2/pages/video_request_page.dart';
 import 'package:objective_app2/pages/recorder_page.dart';
 import 'package:objective_app2/pages/location_picker.dart';
 
@@ -20,8 +18,6 @@ class MyApp extends StatelessWidget {
       initialRoute: AppRoutes.loginRoute,
       routes: {
         AppRoutes.loginRoute: (context) => const LoginPage(),
-        AppRoutes.signingRoute: (context) => const SigningPage(),
-        AppRoutes.videoRequestRoute: (context) => const VideoRequestPage(),
         AppRoutes.recorderRoute: (context) => const RecorderPage(),
         AppRoutes.locationPickerRoute: (context) => const LocationPickerPage(),
       },
