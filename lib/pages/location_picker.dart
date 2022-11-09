@@ -11,6 +11,7 @@ import 'package:web3dart/web3dart.dart';
 import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:web3dart/web3dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:dio/dio.dart';
 
 
 class LocationPickerPage extends StatefulWidget {
@@ -29,6 +30,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     late BitmapDescriptor cameraIcon;
     late BitmapDescriptor cameraIconPressed;
     late BitmapDescriptor cameraIconSelected;
+    Dio dio = Dio();
 
     Set<Marker> _markers = {};
     late Marker _marker;
@@ -321,6 +323,9 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           secondsDuration: 3600,
         );
 
+        var requests = await getRequests();
+        print(requests);
+
         cameraIcon = await BitmapDescriptor.fromAssetImage(
           const ImageConfiguration(size: Size(48, 48)),
           'assets/images/camera.png'
@@ -433,6 +438,32 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         }
       }
   }
+
+  Future<List<VideoRequestData>> getRequests() async {
+    Response dioResponse = await dio.get(
+      'https://api.objective.camera/requests',
+    );
+
+    var requests = dioResponse.data['requests'];
+    List<VideoRequestData> result = [];
+
+    for(var i = 0; i < requests.length; i++) {
+      var request = requests[i];
+      result.add(VideoRequestData(
+        direction: (request['location']['direction']).toDouble(),
+        latitude: request['location']['lat'],
+        longitude: request['location']['long'],
+        startTimestamp: DateTime.parse(request['start_time']).millisecondsSinceEpoch ~/ 1000,
+        secondsDuration: (
+          DateTime.parse(request['end_time']).millisecondsSinceEpoch
+          - DateTime.parse(request['start_time']).microsecondsSinceEpoch
+        ) ~/ 1000,
+        txHash: request['id'],
+      ));
+    }
+    return result;
+  }
+
 }
 
 typedef ScrollWithScaleOnStartCallback = void Function();
