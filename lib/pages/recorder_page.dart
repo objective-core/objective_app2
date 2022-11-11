@@ -16,6 +16,10 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/services.dart';
 
+import 'package:objective_app2/models/location.dart';
+import 'package:objective_app2/models/login.dart';
+import 'package:objective_app2/models/requests.dart';
+
 
 class RecorderPage extends StatefulWidget {
   const RecorderPage({Key? key}) : super(key: key);
@@ -28,15 +32,34 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   late CameraController controller;
   late List<CameraDescription> cameras; 
   late Data data;
+  Video? video;
   Dio dio = Dio();
+
+  LocationModel? location;
+  LoginModel? login;
+  RequestFromServer? videoRequest;
 
   var isVideoRecording = false;
   var uploading = false;
   var initialized = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    data = ModalRoute.of(context)!.settings.arguments as Data;
+    List<dynamic> args = ModalRoute.of(context)!.settings.arguments as List;
+
+    print(args);
+
+    location = args[0];
+    login = args[1];
+    videoRequest = args[2];
+
+    print('done');
 
     return FutureBuilder<bool>(
       future: initCamera(),
@@ -77,55 +100,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
                   ),
                 )
               ),
-              Positioned(
-                bottom: 25,
-                left: 15,
-                width: 70,
-                height: 70,
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  child: RawMaterialButton(
-                    onPressed: () {
-                      // Go to map page.
-                      Navigator.pushNamed(context, AppRoutes.locationPickerRoute, arguments: data);
-                    },
-                    elevation: 2.0,
-                    fillColor: Colors.black,
-                    padding: EdgeInsets.all(15.0),
-                    shape: CircleBorder(),
-                    child: const Icon(
-                      size: 30,
-                      Icons.add_shopping_cart ,
-                      color: Colors.white,
-                    ),
-                  ),
-                )
-              ),
-              Positioned(
-                bottom: 25,
-                right: 15,
-                width: 70,
-                height: 70,
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  child: RawMaterialButton(
-                    onPressed: () {
-                      // Go to map page.
-                    },
-                    elevation: 2.0,
-                    fillColor: Colors.black,
-                    padding: const EdgeInsets.all(15.0),
-                    shape: const CircleBorder(),
-                    child: const Icon(
-                      size: 35,
-                      Icons.attach_money,
-                      color: Colors.white,
-                    ),
-                  ),
-                )
-              )
             ],
           );
         } else {
@@ -140,9 +114,9 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
   void startVideoRecording() async {
     try {
-      data.video = Video(
+      video = Video(
         startTime: DateTime.now(),
-        position: data.currentPosition!,
+        position: location!.currentLocation,
       );
 
       await controller.startVideoRecording();
@@ -166,15 +140,17 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
       print('uploading...');
 
-      data.video!.path = path;
-      data.video!.hash = await getFileCIDHash(path);
-      data.video!.endTime = DateTime.now();
+      video!.path = path;
+      video!.hash = await getFileCIDHash(path);
+      video!.endTime = DateTime.now();
 
-      var messageToSign = 'video hash: ${data.video!.hash}';
-      data.video!.signature = await signMessageWithMetamask(messageToSign);
+      var messageToSign = 'video hash: ${video!.hash}';
+      video!.signature = await login!.signMessageWithMetamask(messageToSign);
 
+      print('signed ${video!.signature}');
       await uploadVideo();
 
+      Navigator.pop(context, video);
       print('uploaded.');
     } catch (e) {
       print(e);
@@ -246,12 +222,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   }
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -310,47 +280,29 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     var url = Uri.https('api.objective.camera', 'upload/');
     var request = http.MultipartRequest("POST", url);
 
+    print('loading file??');
     request.files.add(
       await http.MultipartFile.fromPath(
         'file',
-        data.video!.path!,
+        video!.path!,
       )
     );
     request.fields.addAll({
-      'lat': data.currentPosition!.latitude.toString(),
-      'long': data.currentPosition!.longitude.toString(),
-      'start': data.video!.startTime.millisecondsSinceEpoch.toString(),
-      'end': data.video!.endTime!.millisecondsSinceEpoch.toString(),
-      'median_direction': data.currentPosition!.heading.truncate().toString(),
-      'signature': data.video!.signature!,
-      'request_id': '1667993686',
-      'expected_hash': data.video!.hash!,
+      'lat': video!.position.latitude.toString(),
+      'long': video!.position.longitude.toString(),
+      'start': video!.startTime.millisecondsSinceEpoch.toString(),
+      'end': video!.endTime!.millisecondsSinceEpoch.toString(),
+      'median_direction': video!.position.heading.truncate().toString(),
+      'signature': video!.signature!,
+      'request_id': videoRequest!.requestId,
+      'expected_hash': video!.hash!,
     });
 
+    print('prepared request: ${request.fields}');
     var response = await request.send();
     print(response.statusCode);
     print(await response.stream.bytesToString());
 
     return true;
   }
-
-  Future<String> signMessageWithMetamask(String message) async {
-    if (data.connector!.connected) {
-      print("Message received");
-      print(message);
-
-      EthereumWalletConnectProvider provider =
-          EthereumWalletConnectProvider(data.connector!);
-
-      launchUrlString(data.connectionUri!, mode: LaunchMode.externalApplication);
-
-      return await provider.personalSign(
-        message: message,
-        address: data.connector!.session.accounts[0],
-        password: '',
-      );
-    }
-    return '';
-  }
-
 }

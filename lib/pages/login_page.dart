@@ -33,6 +33,11 @@ class _LoginPageState extends State<LoginPage> {
         });
               print(session.accounts[0]);
               print(session.chainId);
+
+        if(session.chainId == 5) {
+          Navigator.pushNamed(context, AppRoutes.requestPickerRoute, arguments: data);
+        }
+
         setState(() {
           _session = session;
         });
@@ -53,8 +58,6 @@ class _LoginPageState extends State<LoginPage> {
     if (data.connector == null) {
       connectToWallet();
     }
-
-    updatePosition();
 
     return Scaffold(
       appBar: AppBar(
@@ -163,36 +166,6 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Future<void> updatePosition() async {
-    var serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      print('location disabled');
-      return Future.error('Location services are disabled.');
-    }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Permissions are denied, next time you could try
-        // requesting permissions again (this is also where
-        // Android's shouldShowRequestPermissionRationale
-        // returned true. According to Android guidelines
-        // your App should show an explanatory UI now.
-        return Future.error('Location permissions are denied');
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever, handle appropriately.
-      return Future.error(
-        'Location permissions are permanently denied, we cannot request permissions.');
-    }
-
-    data.currentPosition = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    print(data.currentPosition);
-  }
-
   Future<bool> connectToWallet() async {
     print('connect to wallet');
     sessionStorage = WalletConnectSecureStorage();
@@ -236,6 +209,10 @@ class _LoginPageState extends State<LoginPage> {
         (payload) => setState(() {
               _session = null;
             }));
+
+    if(data.connector!.session.chainId == 5) {
+      Navigator.pushNamed(context, AppRoutes.requestPickerRoute, arguments: data);
+    }
 
     return true;
   }
