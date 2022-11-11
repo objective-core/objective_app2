@@ -42,6 +42,8 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
   String? selectedRequestId;
   bool pickingLocation = false;
 
+  BitmapDescriptor? cameraIcon;
+
   // Map related
   Completer<GoogleMapController> _controller = Completer();
   CameraPosition? lastMapPosition;
@@ -454,6 +456,27 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       );
 
       await _requestMarkers.addLabelMarker(marker);
+
+      if(!captured) {
+        cameraIcon ??= await BitmapDescriptor.fromAssetImage(
+          const ImageConfiguration(size: Size(24, 24)),
+          'assets/images/camera-small.png'
+        );
+
+        // print('direction: ${request.direction} ${request.latitude} ${request.longitude} ${request.requestId}');
+
+        var cameraMarker = Marker(
+          // This marker id can be anything that uniquely identifies each marker.
+          markerId: MarkerId('camera_marker'),
+          position: LatLng(request.latitude, request.longitude),
+          icon: cameraIcon!,
+          draggable: false,
+          anchor: const Offset(0.5, 1),
+          rotation: request.direction,
+        );
+
+        _requestMarkers.add(cameraMarker);
+      }
     }
 
     print('rebuild done ${_requestMarkers.length}');

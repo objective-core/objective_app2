@@ -69,6 +69,7 @@ class Video {
   String? signature;
   DateTime startTime;
   DateTime? endTime;
+  double heading = 0.0;
 
   Video({
     required this.startTime,
