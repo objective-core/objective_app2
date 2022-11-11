@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import 'package:objective_app2/models/location.dart';
 import 'package:objective_app2/models/login.dart';
 import 'package:objective_app2/models/requests.dart';
+import 'package:objective_app2/pages/alert_dialog.dart';
 
 
 class RecorderPage extends StatefulWidget {
@@ -144,14 +145,22 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       video!.hash = await getFileCIDHash(path);
       video!.endTime = DateTime.now();
 
+      if(video!.hash == '') {
+        showAlertDialog(context, 'Error', 'Error uploading video, try again.');
+        return;
+      }
+
       var messageToSign = 'video hash: ${video!.hash}';
       video!.signature = await login!.signMessageWithMetamask(messageToSign);
 
       print('signed ${video!.signature}');
-      await uploadVideo();
-
-      Navigator.pop(context, video);
-      print('uploaded.');
+      var result = await uploadVideo();
+      if(result) {
+        Navigator.pop(context, video);
+        print('uploaded.');
+      } else {
+        showAlertDialog(context, 'Error', 'Error uploading video, try again.');
+      }
     } catch (e) {
       print(e);
     }
@@ -188,7 +197,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
     var cidHash = base58.encode(Uint8List.fromList(hex.decode(combined)));
     var fastCidHash = fast_base58.Base58Encode(hex.decode(combined));
-    var actualCID = uploadToIpfs(path);
+    var actualCID = await uploadToIpfs(path);
     print('cidHash: $cidHash, fastCidHash: $fastCidHash actualCID: $actualCID');
     return actualCID;
   }
@@ -245,22 +254,29 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       ),
     });
 
-    Response dioResponse = await dio.post(
-      'https://ipfs.objective.camera/api/v0/add',
-      data: uploadFile,
-      options: Options(
-        headers: {
-          "Authorization": "Basic $authorizationToken",
-        },
-      ),
-      onSendProgress: (received, total) {
-        if (total != -1) {
-          print((received / total * 100).toStringAsFixed(0) + '%');
-        }
-      },
-    );
+    Response? dioResponse;
 
-    var expectedHash = dioResponse.data['Hash'];
+    try {
+      dioResponse = await dio.post(
+        'https://ipfs.objective.camera/api/v0/add',
+        data: uploadFile,
+        options: Options(
+          headers: {
+            "Authorization": "Basic $authorizationToken",
+          },
+        ),
+        onSendProgress: (received, total) {
+          if (total != -1) {
+            print((received / total * 100).toStringAsFixed(0) + '%');
+          }
+        },
+      );
+    } catch (e) {
+      print(e);
+      return '';
+    }
+
+    var expectedHash = dioResponse!.data['Hash'];
     return expectedHash;
   }
 
@@ -298,11 +314,17 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       'expected_hash': video!.hash!,
     });
 
+     var response;
     print('prepared request: ${request.fields}');
-    var response = await request.send();
+    try {
+      response = await request.send();
+    } catch (e) {
+      print(e);
+      return false;
+    }
     print(response.statusCode);
     print(await response.stream.bytesToString());
 
-    return true;
+    return response.statusCode == 200 || response.statusCode == 201;
   }
 }

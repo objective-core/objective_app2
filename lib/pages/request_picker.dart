@@ -44,6 +44,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
   // Map related
   Completer<GoogleMapController> _controller = Completer();
+  CameraPosition? lastMapPosition;
   var _mapAngle = 0.0;
 
   Set<Marker> _requestMarkers = {};
@@ -91,7 +92,18 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       }),
       onCameraMarkerOnStopUpdate: ((marker) {
       }),
-      onVideoRequestSent: ((data) => setState(() {pickingLocation = false;})),
+      onVideoRequestSent: ((data) async {
+        pickingLocation = false;
+        await rebuildRequestsMarkers();
+        setState(() {});
+      }),
+      onVideoRequestCancel: () async {
+        print('onVideoRequestCancel called');
+        pickingLocation = false;
+        await rebuildRequestsMarkers();
+        print('_requestMarkers: ${_requestMarkers.length}');
+        setState(() {});
+      },
     );
 
     super.initState();
@@ -149,6 +161,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           },
           onCameraMove: (position) {
             _mapAngle = position.bearing;
+            lastMapPosition = position;
           },
         )
       )];
@@ -234,7 +247,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
     return [
       Positioned(
-        bottom: 40,
+        bottom: 35,
         left: 20,
         height: 50,
         child: effectiveButton,
@@ -307,6 +320,31 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       ];
     }
 
+    if(!login.loggedIn) {
+      return [
+        Positioned(
+          bottom: 0,
+          left: 0,
+          height: 120,
+          width: MediaQuery.of(context).size.width,
+          child: Container(
+            color: Colors.black.withOpacity(0.5),
+            child: Center(
+              child: Container(
+                child: TextButton(
+                  child: Text('Login', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
+                  onPressed: () async {
+                    print('login');
+                    await login.login();
+                  }
+                )
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+
     return [
       Positioned(
         bottom: 0,
@@ -349,19 +387,13 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
   }
 
   rebuildRequestsMarkers() async {
-    _requestMarkers = {};
-
     if(pickingLocation) {
-      _requestMarkers.add(
-        // need to rework
-        await locationPickerBuilder.buildMarker(
-          context,
-          location.currentLocation.latitude,
-          location.currentLocation.longitude,
-        )
-      );
       return;
     }
+
+    print('rebuildRequestsMarkers ${videoRequestsManager.nearbyRequests.length}');
+
+    _requestMarkers = {};
 
     for(var i = 0; i < videoRequestsManager.nearbyRequests.length; i++) {
       RequestFromServer request = videoRequestsManager.nearbyRequests[i];
@@ -389,6 +421,25 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         }
       }
 
+      if(captured) {
+        BitmapDescriptor? thumbnail = videoRequestsManager.thumbnailById[request.requestId];
+        if(thumbnail != null) {
+          var marker = Marker(
+            markerId: MarkerId('video_location_${request.requestId}'),
+            position: LatLng(request.latitude, request.longitude),
+            icon: thumbnail,
+            onTap: () {
+              print('selected ${request.requestId}');
+              setState(() {
+                selectedRequestId = request.requestId;
+              });
+            },
+          );
+          _requestMarkers.add(marker);
+          continue;
+        }
+      }
+
       var marker = LabelMarker(
         label: message,
         markerId: MarkerId('video_location_${request.requestId}'),
@@ -404,6 +455,8 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
       await _requestMarkers.addLabelMarker(marker);
     }
+
+    print('rebuild done ${_requestMarkers.length}');
   }
 
   List<Positioned> buildToLocationPickerButtons(BuildContext context) {
@@ -417,7 +470,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
     return [
       Positioned(
-        bottom: 40,
+        bottom: 35,
         right: 20,
         height: 50,
         child: IconButton(
@@ -427,8 +480,21 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           onPressed: () async {
             if(active)  {
               pickingLocation = true;
-              await rebuildRequestsMarkers();
-              setState(() {});
+              selectedRequestId = null;
+              double lat = location.currentLocation.latitude;
+              double long = location.currentLocation.longitude;
+              if(lastMapPosition != null) {
+                lat = lastMapPosition!.target.latitude;
+                long = lastMapPosition!.target.longitude;
+              }
+              Marker marker = await locationPickerBuilder.buildMarker(
+                context,
+                lat,
+                long,
+              );
+              setState(() {
+                _requestMarkers = {marker};
+              });
             } else {
               // TODO: show hint
             }

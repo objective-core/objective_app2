@@ -25,6 +25,7 @@ typedef CameraMarkerOnStopUpdate = void Function(Marker marker);
 
 typedef VideoRequestUpdated = void Function(VideoRequestData data);
 typedef VideoRequestSent = void Function(VideoRequestData data);
+typedef VideoRequestCancel = void Function();
 
 
 enum PickerModes{
@@ -46,6 +47,7 @@ class LocationPickerBuilder {
     CameraMarkerUpdated onCameraMarkerUpdated;
     VideoRequestUpdated onVideoRequestUpdated;
     VideoRequestSent onVideoRequestSent;
+    VideoRequestCancel onVideoRequestCancel;
     CameraMarkerOnStartUpdate onCameraMarkerOnStartUpdate;
     CameraMarkerOnStopUpdate onCameraMarkerOnStopUpdate;
 
@@ -74,6 +76,7 @@ class LocationPickerBuilder {
       required this.onCameraMarkerOnStartUpdate,
       required this.onCameraMarkerOnStopUpdate,
       required this.onVideoRequestSent,
+      required this.onVideoRequestCancel,
     });
 
     List<Positioned> buildLocationPicker(BuildContext context) {
@@ -178,6 +181,19 @@ class LocationPickerBuilder {
               ),
             ],
           ) 
+        ),
+        Positioned(
+            top: 40,
+            left: 10,
+            height: 50,
+            width: 100,
+            child: TextButton(
+              child: Text('Cancel', textAlign: TextAlign.left, style: TextStyle(color: Colors.white, fontSize: 20),),
+              onPressed: () {
+                print('pressed cancel, calling callback ${onVideoRequestCancel}');
+                onVideoRequestCancel();
+              }
+            ),
         ),
         locationConfirmed && timeConfirmed ? Positioned(
             top: 40,

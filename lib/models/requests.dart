@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:map_location_picker/map_location_picker.dart';
+import 'package:marker_icon/marker_icon.dart';
 
 
 class RequestFromServer {
@@ -64,6 +67,7 @@ class VideoRequestsManager {
 
   List<RequestFromServer> nearbyRequests = [];
   Map<String, RequestFromServer> requestById = {};
+  Map<String, BitmapDescriptor> thumbnailById = {};
 
   final OnNearbyRequestsUpdate onNearbyRequestsUpdate;
 
@@ -75,7 +79,12 @@ class VideoRequestsManager {
   VideoRequestsManager({required this.onNearbyRequestsUpdate});
 
   Future<List<RequestFromServer>> refreshRequestsNearby(double lat, double long) async {
-    nearbyRequests = await getRequests(lat: lat, long: long);
+    try {
+      nearbyRequests = await getRequests(lat: lat, long: long);
+    } catch (e) {
+      print(e);
+      return nearbyRequests;
+    }
     onNearbyRequestsUpdate(nearbyRequests);
     return nearbyRequests;
   }
@@ -100,6 +109,32 @@ class VideoRequestsManager {
     }
   }
 
+  Future<void> loadThumbnail(RequestFromServer request) async {
+    if(request.thumbnail == '') {
+      return;
+    }
+
+    // already loaded
+    if(thumbnailById[request.requestId] != null) {
+      return;
+    }
+
+    print('loading ${request.thumbnail} ${request.requestId}');
+
+    try{
+      thumbnailById[request.requestId] = await MarkerIcon.downloadResizePictureCircle(
+        request.thumbnail,
+        size: 150,
+        addBorder: true,
+        borderColor: Colors.yellow,
+        borderSize: 10,
+      );
+    } catch(e) {
+      print(e);
+    }
+  }
+
+
   Future<List<RequestFromServer>> getRequests({double lat=-1, double long=-1, int radius=1000}) async {
     Map<String, String> parameters = {};
 
@@ -110,17 +145,10 @@ class VideoRequestsManager {
       parameters['hide_expired'] = 'true';
     }
 
-    Response dioResponse;
-    // TODO: handle errors
-    try {
-      dioResponse = await dio.get(
-        'https://api.objective.camera/requests_by_location',
-        queryParameters: parameters,
-      );
-    } catch(e) {
-      print(e);
-      return [];
-    } 
+    Response dioResponse = await dio.get(
+      'https://api.objective.camera/requests_by_location',
+      queryParameters: parameters,
+    );
 
     print(dioResponse.requestOptions.uri);
 
@@ -129,7 +157,7 @@ class VideoRequestsManager {
 
     for(var i = 0; i < requests.length; i++) {
       var request = requests[i];
-      var requestFromServer =RequestFromServer(
+      var requestFromServer = RequestFromServer(
         direction: (request['location']['direction']).toDouble(),
         latitude: request['location']['lat'],
         longitude: request['location']['long'],
@@ -138,8 +166,9 @@ class VideoRequestsManager {
         requestId: request['id'],
         reward: request['reward'],
         videoUrl: request['video'] == null ? '' : 'https://ipfs.objective.camera/${request['video']['file_hash']}',
-        thumbnail: request['video'] == null ? '' : 'https://i.picsum.photos/id/182/200/100.jpg?hmac=nuni_xT1TfXyyqbAcn1bG1oAXfba-QH6lW1zNDDgKDs',
+        thumbnail: request['video'] == null ? '' : 'https://ipfs.objective.camera/thumbnails/${request['video']['file_hash']}.png',
       );
+      loadThumbnail(requestFromServer);
       requestById[requestFromServer.requestId] = requestFromServer;
       result.add(requestFromServer);
     }
