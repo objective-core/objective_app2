@@ -35,7 +35,7 @@ class RecorderPage extends StatefulWidget {
 }
 
 class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver {
-  late CameraController controller;
+  CameraController? controller;
   late List<CameraDescription> cameras; 
   late Data data;
   Video? video;
@@ -87,9 +87,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       averageGravity = newAverageGravity;
 
       if(oldAverageGravity < verticalThreshold && newAverageGravity > verticalThreshold) { 
-        setState(() {});
+        if (mounted) {
+          setState(() {});
+        }
+
       } else if (oldAverageGravity > verticalThreshold && newAverageGravity < verticalThreshold) {
-        setState(() {});
+        if (mounted) {
+          setState(() {});
+        }
       }
 
       // print(averageGravity);
@@ -97,14 +102,16 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
     compassStream = FlutterCompass.events?.listen((CompassEvent event) {
       heading = event.heading!;
-      print(heading);
+      // print(heading);
       if(isVideoRecording) {
         headingSum += heading;
         headingCount++;
         averageHeading = headingSum / headingCount;
       }
 
-      setState(() {});
+       if (mounted) {
+          setState(() {});
+       }
     });
 
     super.initState();
@@ -134,7 +141,17 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
                 left: 0,
                 width: MediaQuery.of(context).size.width,
                 height: MediaQuery.of(context).size.height - 220,
-                child: CameraPreview(controller)
+                child: !uploading && controller != null ? CameraPreview(controller!) : const Center(
+                  child: Text(
+                    'Processing & uploading video...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.normal,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                )
               ),
               Positioned(
                 bottom: 20,
@@ -147,7 +164,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
                       if (isVideoRecording) {
                         stopVideoRecording();
                       } else {
-                        if(verified) {
+                        if((controller != null && verified && !uploading)) {
                           startVideoRecording();
                         }
                       }
@@ -159,7 +176,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
                     child: Icon(
                       size: 35.0,
                       isVideoRecording ? Icons.stop: Icons.circle,
-                      color: isVideoRecording ? Colors.black : (verified ? Colors.red : Colors.grey),
+                      color: isVideoRecording ? Colors.black : ((controller != null && verified && !uploading) ? Colors.red : Colors.grey),
                     ),
                   ),
                 )
@@ -220,7 +237,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       );
     }
 
-    print('difference: $difference heading: $heading direction: ${videoRequest!.direction}');
+    // print('difference: $difference heading: $heading direction: ${videoRequest!.direction}');
 
     if(difference > 20 && difference < 340) {
       if(difference > 180) {
@@ -279,7 +296,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       headingCount = 0;
       headingSum = 0;
 
-      await controller.startVideoRecording();
+      await controller!.startVideoRecording();
       setState(() {
         isVideoRecording = true;
       });
@@ -290,7 +307,8 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
   void stopVideoRecording() async {
     try {
-      var file = await controller.stopVideoRecording();
+      uploading = true;
+      var file = await controller!.stopVideoRecording();
       var path = '/storage/emulated/0/DCIM/Camera/${file.name}';
       file.saveTo(path);
 
@@ -321,7 +339,9 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       } else {
         showAlertDialog(context, 'Error', 'Error uploading video, try again.');
       }
+      uploading = false;
     } catch (e) {
+      uploading = false;
       print(e);
     }
   }
@@ -368,8 +388,9 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     }
 
     cameras = await availableCameras();
-    controller = CameraController(cameras[0], ResolutionPreset.medium);
-    controller.initialize().then((_) {
+    print('initCamera $cameras');
+    controller = CameraController(cameras[0], ResolutionPreset.veryHigh);
+    controller!.initialize().then((_) {
       if (!mounted) {
         return false;
       }
@@ -391,22 +412,30 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   }
 
   @override
-  void dispose() {
+  void dispose() async {
     WidgetsBinding.instance.removeObserver(this);
 
     compassStream?.cancel();
     magnetometerStream?.cancel();
     accelerometerStream?.cancel();
 
+    initialized = false;
+
+    if(controller != null) {
+      await controller!.dispose();
+    }
+    controller = null;
+
     super.dispose();
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
     print('state changed');
     print(state);
     if (state == AppLifecycleState.inactive) {
-      controller.dispose();
+      await controller!.dispose();
+      controller = null;
     }
   }
 
@@ -437,7 +466,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         },
       );
     } catch (e) {
-      print(e);
+      print('upload to ipfs failed $e');
       return '';
     }
 
