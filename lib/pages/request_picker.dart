@@ -7,6 +7,8 @@ import 'package:map_location_picker/map_location_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:objective_app2/utils/data.dart';
 import 'package:web3dart/web3dart.dart';
+import 'dart:io' show Platform;
+
 
 import 'package:walletconnect_dart/walletconnect_dart.dart';
 import 'package:web3dart/web3dart.dart';
@@ -463,7 +465,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       if(!captured) {
         cameraIcon ??= await BitmapDescriptor.fromAssetImage(
           const ImageConfiguration(size: Size(24, 24)),
-          'assets/images/camera-small.png'
+          'assets/images/camera-small@2x.png'
         );
 
         // print('direction: ${request.direction} ${request.latitude} ${request.longitude} ${request.requestId}');

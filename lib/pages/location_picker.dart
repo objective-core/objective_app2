@@ -318,11 +318,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
         cameraIcon = await BitmapDescriptor.fromAssetImage(
           const ImageConfiguration(size: Size(48, 48)),
-          'assets/images/camera.png'
+          'assets/images/camera@2x.png'
         );
         cameraIconPressed = await BitmapDescriptor.fromAssetImage(
           const ImageConfiguration(size: Size(48, 48)),
-          'assets/images/camera-pressed.png'
+          'assets/images/camera-pressed@2x.png'
         );
         cameraIconSelected = cameraIcon;
 

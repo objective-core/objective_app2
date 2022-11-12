@@ -214,7 +214,7 @@ class LocationPickerBuilder {
             top: 40,
             right: 10,
             height: 50,
-            width: 180,
+            width: 200,
             child: TextButton(
               child: Text('Confirm Location', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () {
@@ -228,7 +228,7 @@ class LocationPickerBuilder {
             top: 40,
             right: 10,
             height: 50,
-            width: 200,
+            width: 220,
             child: TextButton(
               child: Text('Confirm Time: ${DateFormat('HH:mm').format(calculateSelectedTime(context))}', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () {
@@ -301,11 +301,11 @@ class LocationPickerBuilder {
 
     cameraIcon = await BitmapDescriptor.fromAssetImage(
       const ImageConfiguration(size: Size(48, 48)),
-      'assets/images/camera.png'
+      'assets/images/camera@2x.png'
     );
     cameraIconPressed = await BitmapDescriptor.fromAssetImage(
       const ImageConfiguration(size: Size(48, 48)),
-      'assets/images/camera-pressed.png'
+      'assets/images/camera-pressed@2x.png'
     );
     cameraIconSelected = cameraIcon;
 

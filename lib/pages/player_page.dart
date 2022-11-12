@@ -41,20 +41,15 @@ class _PlayerPageState extends State<PlayerPage> {
                   aspectRatio: _controller.value.aspectRatio,
                   child: VideoPlayer(_controller),
                 )
-              : Container(),
+              : CircularProgressIndicator(color: Colors.white),
         ),
         floatingActionButton: FloatingActionButton(
           backgroundColor: Colors.white,
           onPressed: () {
-            print('url: ${widget.request.videoUrl}');
-            setState(() {
-              _controller.value.isPlaying
-                  ? _controller.pause()
-                  : _controller.play();
-            });
+            Navigator.pop(context);
           },
           child: Icon(
-            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+            Icons.close,
             color: Colors.black,
           ),
         ),

@@ -526,17 +526,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         return;
       }
 
-      var path = '/storage/emulated/0/DCIM/Camera/${file.name}';
-      file.saveTo(path);
-
       setState(() {
       });
 
       print('uploading...');
 
       video!.heading = (averageHeading + 360) % 360;
-      video!.path = path;
-      video!.hash = await getFileCIDHash(path);
+      video!.path = file.path;
+      video!.hash = await getFileCIDHash(file.path);
       video!.endTime = DateTime.now();
 
       if(video!.hash == '') {
@@ -736,18 +733,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     fields['expected_hash'] = video!.hash!;
 
     print('prepared request: ${fields}');
-
-    // request.fields.addAll({
-    //   'lat': video!.position.latitude.toString(),
-    //   'long': video!.position.longitude.toString(),
-    //   'start': video!.startTime.millisecondsSinceEpoch.toString(),
-    //   'end': video!.endTime!.millisecondsSinceEpoch.toString(),
-    //   'median_direction': video!.heading.truncate().toString(),
-    //   'signature': video!.signature!,
-    //   'request_id': videoRequest!.requestId,
-    //   'expected_hash': video!.hash!,
-    // });
-
     http.Response response;
 
     try {
