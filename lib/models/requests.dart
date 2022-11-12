@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:map_location_picker/map_location_picker.dart';
 import 'package:marker_icon/marker_icon.dart';
+import 'dart:math';
 
 
 class RequestFromServer {
@@ -15,6 +16,7 @@ class RequestFromServer {
   DateTime startTime;
   DateTime endTime;
   String videoUrl;
+  int action;
   String thumbnail; // if null -> no video
 
   RequestFromServer({
@@ -25,6 +27,7 @@ class RequestFromServer {
     required this.direction,
     required this.startTime,
     required this.endTime,
+    required this.action,
     this.videoUrl = '',
     this.thumbnail = '',
   });
@@ -143,6 +146,7 @@ class VideoRequestsManager {
       parameters['long'] = long.toString();
       parameters['radius'] = radius.toString();
       parameters['hide_expired'] = 'true';
+      parameters['since_seconds'] = '86400';
     }
 
     Response dioResponse = await dio.get(
@@ -167,6 +171,7 @@ class VideoRequestsManager {
         reward: request['reward'],
         videoUrl: request['video'] == null ? '' : 'https://ipfs.objective.camera/${request['video']['file_hash']}',
         thumbnail: request['video'] == null ? '' : 'https://ipfs.objective.camera/thumbnails/${request['video']['file_hash']}.png',
+        action: ((request['location']['direction'] + 90) + Random().nextInt(180)) % 360,
       );
       loadThumbnail(requestFromServer);
       requestById[requestFromServer.requestId] = requestFromServer;

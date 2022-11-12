@@ -34,6 +34,16 @@ class RecorderPage extends StatefulWidget {
   State<RecorderPage> createState() => _RecorderPageState();
 }
 
+
+// 1. Page shows camera steam preview
+// 2. When stream is verified (direction / location / phone orientation) button record becomes available
+// 3. When button record is pressed, camera stream is recorded until verification requuriements met.
+// 3.1 Video should contain at least 10 seconds of requested direction.
+// 3.2 Video should contain executed actions (turn to random direction)
+// 3.3 Video should not be longer than 30 seconds.
+// 4. If all requirements met, video is uploaded to server.
+// 5. Once video uploaded to server, we sign it's hash with metamask and push signature to server.
+// 6. If requirements not met, video is discarded, and user is asked to try again.
 class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver {
   CameraController? controller;
   late List<CameraDescription> cameras; 
@@ -52,6 +62,9 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   var headingSum = 0.0;
   var headingCount = 0;
 
+  var requestedDirectionCaptured = 0.0;
+  var actionDirectionCaptured = 0.0;
+
   LocationModel? location;
   LoginModel? login;
   RequestFromServer? videoRequest;
@@ -59,11 +72,19 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   var isVideoRecording = false;
   var uploading = false;
   var initialized = false;
+  double uploadingProgress = 0.0;
+
+  var angleChangeTime;
 
   var magnetometerStream, accelerometerStream, compassStream;
 
   double get targetDiffernce => ((videoRequest!.direction) - (heading + 360) % 360) % 360;
-  bool get verified => ((targetDiffernce < 20 || targetDiffernce > 340) && averageGravity >= 8.0);
+  double get actionDiffernce => ((videoRequest!.action) - (heading + 360) % 360) % 360;
+  bool get targetVerified => ((targetDiffernce < 20 || targetDiffernce > 340) && averageGravity >= 8.0);
+  bool get actionVerified => ((actionDiffernce < 20 || actionDiffernce > 340) && averageGravity >= 8.0);
+  int get timeLeft => max(30 - ((DateTime.now().millisecondsSinceEpoch - video!.startTime.millisecondsSinceEpoch) / 1000.0).truncate(), 0);
+
+  bool get goodToStartRecording => controller != null && targetVerified && !uploading;
 
   @override
   void initState() {
@@ -96,17 +117,39 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
           setState(() {});
         }
       }
-
       // print(averageGravity);
     });
 
     compassStream = FlutterCompass.events?.listen((CompassEvent event) {
+      var previouseAngleChangeTime = angleChangeTime == null ? DateTime.now() : angleChangeTime;
+      angleChangeTime = DateTime.now();
       heading = event.heading!;
-      // print(heading);
+      print('heading $heading headingForCameraMode: ${event.headingForCameraMode} accuracy: ${event.accuracy}');
+      // print('location heading ${location!.currentLocation.heading}');
+
       if(isVideoRecording) {
         headingSum += heading;
         headingCount++;
         averageHeading = headingSum / headingCount;
+        if(targetVerified) {
+          requestedDirectionCaptured += (angleChangeTime.millisecondsSinceEpoch - previouseAngleChangeTime.millisecondsSinceEpoch) / 1000;
+          // print('requestedDirectionCaptured: $requestedDirectionCaptured seconds $angleChangeTime, $previouseAngleChangeTime');
+        }
+
+        if(actionVerified && requestedDirectionCaptured > 10) {
+          actionDirectionCaptured += (angleChangeTime.millisecondsSinceEpoch - previouseAngleChangeTime.millisecondsSinceEpoch) / 1000;
+          // print('actionDirectionCaptured: $actionDirectionCaptured seconds $angleChangeTime, $previouseAngleChangeTime');
+
+          if(actionDirectionCaptured > 5) {
+            // all good we captured enough.
+            stopVideoRecording();
+          }
+        }
+
+        if(timeLeft == 0) {
+          // captured enough, stop recording.
+          stopVideoRecording();
+        }
       }
 
        if (mounted) {
@@ -122,79 +165,121 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   Widget build(BuildContext context) {
     List<dynamic> args = ModalRoute.of(context)!.settings.arguments as List;
 
-    print(args);
-
     location = args[0];
     login = args[1];
     videoRequest = args[2];
 
-    print('done');
-
-    return FutureBuilder<bool>(
-      future: initCamera(),
-      builder: (context, AsyncSnapshot<bool> snapshot) {
-        if (snapshot.hasData) {
-          return Stack(
-            children: [
-              Positioned(
-                top: 100,
-                left: 0,
-                width: MediaQuery.of(context).size.width,
-                height: MediaQuery.of(context).size.height - 220,
-                child: !uploading && controller != null ? CameraPreview(controller!) : const Center(
-                  child: Text(
-                    'Processing & uploading video...',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.normal,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                )
-              ),
-              Positioned(
-                bottom: 20,
-                left: MediaQuery.of(context).size.width / 2 - 40,
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  child: RawMaterialButton(
-                    onPressed: () {
-                      if (isVideoRecording) {
-                        stopVideoRecording();
-                      } else {
-                        if((controller != null && verified && !uploading)) {
-                          startVideoRecording();
-                        }
-                      }
-                    },
-                    elevation: 2.0,
-                    fillColor: Colors.white,
-                    padding: EdgeInsets.all(15.0),
-                    shape: CircleBorder(),
-                    child: Icon(
-                      size: 35.0,
-                      isVideoRecording ? Icons.stop: Icons.circle,
-                      color: isVideoRecording ? Colors.black : ((controller != null && verified && !uploading) ? Colors.red : Colors.grey),
-                    ),
-                  ),
-                )
-              ),
-            ] + buildVerificatorWisgets(context),
-          );
-        } else {
-          return Container(
-            alignment: Alignment.center,
-            child: const CircularProgressIndicator()
-          );
+    return WillPopScope(
+      onWillPop: () async {
+        if(isVideoRecording) {
+          await cancelVideoRecording();
         }
-      }
+        if(controller != null) {
+          await controller!.dispose();
+          controller = null;
+        }
+        return true;
+      },
+      child: FutureBuilder<bool>(
+        future: initCamera(),
+        builder: (context, AsyncSnapshot<bool> snapshot) {
+          if (snapshot.hasData) {
+            return Stack(
+              children: [
+                Positioned(
+                  top: 100,
+                  left: 0,
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height - 220,
+                  child: !uploading && controller != null ? CameraPreview(controller!) : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Processing & uploading video...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.normal,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                        Text(
+                          'Progress: ${uploadingProgress.truncate()}%',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.normal,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                        Text(
+                          uploadingProgress == 100 ? 'Connecting to metamask...' : '',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.normal,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                        const SizedBox(height: 50,),
+                        const CircularProgressIndicator(color: Colors.white)
+                    ]),
+                  )
+                ),
+                Positioned(
+                  bottom: 20,
+                  left: MediaQuery.of(context).size.width / 2 - 40,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    child: RawMaterialButton(
+                      onPressed: () {
+                        print('isVideoRecording $isVideoRecording $goodToStartRecording');
+                        if (isVideoRecording) {
+                          cancelVideoRecording();
+                        } else {
+                          if(goodToStartRecording) {
+                            startVideoRecording();
+                          } else {
+                            print('can start recording $goodToStartRecording, $targetVerified, $uploading, $controller');
+                          }
+                        }
+                      },
+                      elevation: 2.0,
+                      fillColor: Colors.white,
+                      padding: EdgeInsets.all(15.0),
+                      shape: CircleBorder(),
+                      child: Icon(
+                        size: 35.0,
+                        isVideoRecording ? Icons.cancel : Icons.circle,
+                        color: isVideoRecording ? Colors.black : (goodToStartRecording ? Colors.red : Colors.grey),
+                      ),
+                    ),
+                  )
+                ),
+              ] + buildVerificatorWisgets(context),
+            );
+          } else {
+            return Container(
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator()
+            );
+          }
+        }
+      ),
     );
   }
 
   List<Positioned> buildVerificatorWisgets(BuildContext context) {
     List<Positioned> result = [];
+
+    if(uploading) {
+      return result;
+    }
 
     if(averageGravity < 8.0) {
       result.add(
@@ -219,7 +304,15 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
     var difference = targetDiffernce;
 
-    if(verified) {
+    Color arrowsColor = Colors.red;
+    if(isVideoRecording && requestedDirectionCaptured > 10) {
+      difference = actionDiffernce;
+      arrowsColor = Colors.green;
+    }
+
+    // print('action: ${videoRequest!.action}, direction: ${videoRequest!.direction},  heading $heading difference: $difference');
+
+    if(targetVerified || (isVideoRecording && requestedDirectionCaptured > 10)) {
       result.add(
         const Positioned(
             bottom: 140,
@@ -237,31 +330,113 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       );
     }
 
-    // print('difference: $difference heading: $heading direction: ${videoRequest!.direction}');
+    if(isVideoRecording) {
+      result.add(
+        Positioned(
+          bottom: 35,
+          left: 20,
+          width: 50,
+          child: Icon(Icons.image, size: 50, color: Color.fromARGB(min(((requestedDirectionCaptured / 10.0) * 255).truncate() + 30, 255), 76, 175, 80)),
+        )
+      );
+      result.add(
+        Positioned(
+          bottom: 20,
+          left: 20,
+          width: 43,
+          child: Text('${min(((requestedDirectionCaptured / 10.0) * 100).truncate(), 100)}%', style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.none,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        )
+      );
+
+      result.add(
+        Positioned(
+          bottom: 35,
+          left: 70,
+          width: 50,
+          child: Icon(Icons.run_circle , size: 50, color: Color.fromARGB(min(((actionDirectionCaptured / 5.0) * 255).truncate() + 30, 255), 76, 175, 80)),
+        )
+      );
+      result.add(
+        Positioned(
+          bottom: 20,
+          left: 70,
+          width: 43,
+          child: Text('${min(((actionDirectionCaptured / 5.0) * 100).truncate(), 100)}%', style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.none,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        )
+      );
+
+      result.add(
+        Positioned(
+          bottom: 50,
+          right: 20,
+          child: Text('${timeLeft}s', style: TextStyle(
+              color: timeLeft > 5 ? Colors.white : Colors.red,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.none,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        )
+      );
+    }
+
 
     if(difference > 20 && difference < 340) {
       if(difference > 180) {
         var arrowsNum = 1 + (160.0 - (difference - 180)) ~/ 60;
 
-        result += buildLeftArrows(arrowsNum);
+        result += buildLeftArrows(arrowsNum, color: arrowsColor);
       } else {
         var arrowsNum = 1 + difference ~/ 60;
-        result += buildRightArrows(arrowsNum);
+        result += buildRightArrows(arrowsNum,  color: arrowsColor);
       }
     }
 
     return result;
   }
 
-  List<Positioned> buildLeftArrows(int number) {
+  List<Positioned> buildLeftArrows(int number, {Color color = Colors.red}) {
     List<Positioned> result = [];
 
     for(int i = 0; i < number; i++) {
+      if(i == 0) {
+        result.add(
+          Positioned(
+            bottom: 155,
+            left: 0,
+            width: MediaQuery.of(context).size.width,
+            child: const Center(child: Text(
+              'move camera left',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.normal,
+                decoration: TextDecoration.none,
+              ),
+            )),
+          )
+        );
+      }
       result.add(
         Positioned(
           bottom: 140,
-          left: 70 + 10.0 * i,
-          child: Icon(Icons.keyboard_arrow_left_rounded , size: 50, color: number > 1?Colors.red:Colors.yellow),
+          left: 70 - 10.0 * i,
+          child: Icon(Icons.keyboard_arrow_left_rounded , size: 50, color: color),
         )
       );
     }
@@ -269,15 +444,33 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     return result;
   }
 
-  List<Positioned> buildRightArrows(int number) {
+  List<Positioned> buildRightArrows(int number, {Color color = Colors.red}) {
     List<Positioned> result = [];
 
     for(int i = 0; i < number; i++) {
+      if(i == 0) {
+        result.add(
+          Positioned(
+            bottom: 155,
+            left: 0,
+            width: MediaQuery.of(context).size.width,
+            child: const Center(child: Text(
+              'move camera right',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.normal,
+                decoration: TextDecoration.none,
+              ),
+            )),
+          )
+        );
+      }
       result.add(
         Positioned(
           bottom: 140,
-          right: 70 + 10.0 * i,
-          child: Icon(Icons.keyboard_arrow_right_rounded , size: 50, color: number > 1?Colors.red:Colors.yellow),
+          right: 70 - 10.0 * i,
+          child: Icon(Icons.keyboard_arrow_right_rounded , size: 50, color: color),
         )
       );
     }
@@ -285,7 +478,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     return result;
   }
 
-  void startVideoRecording() async {
+  Future<void> startVideoRecording() async {
     try {
       video = Video(
         startTime: DateTime.now(),
@@ -295,25 +488,48 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       averageHeading = 0.0;
       headingCount = 0;
       headingSum = 0;
+      requestedDirectionCaptured = 0.0;
+      actionDirectionCaptured = 0.0;
+      uploadingProgress = 0.0;
+      isVideoRecording = true;
 
       await controller!.startVideoRecording();
       setState(() {
-        isVideoRecording = true;
       });
     } catch (e) {
       print(e);
     }
   }
 
-  void stopVideoRecording() async {
+  Future<void> cancelVideoRecording() async {
+    await controller!.stopVideoRecording();
+    setState(() {
+      uploading = false;
+      isVideoRecording = false;
+    });
+  }
+
+  Future<void> stopVideoRecording() async {
     try {
+      if(!isVideoRecording) {
+        return;
+      }
+
       uploading = true;
+      isVideoRecording = false;
       var file = await controller!.stopVideoRecording();
+
+      if(!(requestedDirectionCaptured > 10 && actionDirectionCaptured > 5 && timeLeft > 0)) {
+        print('verification is not passed');
+        uploading = false;
+        isVideoRecording = false;
+        return;
+      }
+
       var path = '/storage/emulated/0/DCIM/Camera/${file.name}';
       file.saveTo(path);
 
       setState(() {
-        isVideoRecording = false;
       });
 
       print('uploading...');
@@ -412,19 +628,25 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   }
 
   @override
-  void dispose() async {
-    WidgetsBinding.instance.removeObserver(this);
+  void dispose() {
+    print('fucking disposing!');
+    try {
+      WidgetsBinding.instance.removeObserver(this);
 
-    compassStream?.cancel();
-    magnetometerStream?.cancel();
-    accelerometerStream?.cancel();
+      compassStream?.cancel();
+      magnetometerStream?.cancel();
+      accelerometerStream?.cancel();
 
-    initialized = false;
+      initialized = false;
 
-    if(controller != null) {
-      await controller!.dispose();
+      if(controller != null) {
+        controller!.dispose();
+        controller = null;
+      }
+
+    } catch (e) {
+      print(e);
     }
-    controller = null;
 
     super.dispose();
   }
@@ -434,8 +656,13 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     print('state changed');
     print(state);
     if (state == AppLifecycleState.inactive) {
-      await controller!.dispose();
-      controller = null;
+      if(controller != null) {
+        if(isVideoRecording) {
+          await controller!.stopVideoRecording();
+        }
+        await controller!.dispose();
+        controller = null;
+      }
     }
   }
 
@@ -461,6 +688,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         ),
         onSendProgress: (received, total) {
           if (total != -1) {
+            uploadingProgress = received / total * 100;
             print((received / total * 100).toStringAsFixed(0) + '%');
           }
         },
@@ -488,36 +716,51 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     // https://api.objective.camera/upload/
 
     var url = Uri.https('api.objective.camera', 'upload/');
-    var request = http.MultipartRequest("POST", url);
+    // var request = http.Request("POST", url);
 
-    print('loading file??');
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'file',
-        video!.path!,
-      )
-    );
-    request.fields.addAll({
-      'lat': video!.position.latitude.toString(),
-      'long': video!.position.longitude.toString(),
-      'start': video!.startTime.millisecondsSinceEpoch.toString(),
-      'end': video!.endTime!.millisecondsSinceEpoch.toString(),
-      'median_direction': video!.heading.truncate().toString(),
-      'signature': video!.signature!,
-      'request_id': videoRequest!.requestId,
-      'expected_hash': video!.hash!,
-    });
+    // request.files.add(
+    //   await http.MultipartFile.fromPath(
+    //     'file',
+    //     video!.path!,
+    //   )
+    // );
+    var fields = new Map<String, dynamic>();
 
-     var response;
-    print('prepared request: ${request.fields}');
+    fields['lat'] = video!.position.latitude.toString();
+    fields['long'] = video!.position.longitude.toString();
+    fields['start'] = video!.startTime.millisecondsSinceEpoch.toString();
+    fields['end'] = video!.endTime!.millisecondsSinceEpoch.toString();
+    fields['median_direction'] = video!.heading.truncate().toString();
+    fields['signature'] = video!.signature!;
+    fields['request_id'] = videoRequest!.requestId;
+    fields['expected_hash'] = video!.hash!;
+
+    print('prepared request: ${fields}');
+
+    // request.fields.addAll({
+    //   'lat': video!.position.latitude.toString(),
+    //   'long': video!.position.longitude.toString(),
+    //   'start': video!.startTime.millisecondsSinceEpoch.toString(),
+    //   'end': video!.endTime!.millisecondsSinceEpoch.toString(),
+    //   'median_direction': video!.heading.truncate().toString(),
+    //   'signature': video!.signature!,
+    //   'request_id': videoRequest!.requestId,
+    //   'expected_hash': video!.hash!,
+    // });
+
+    http.Response response;
+
     try {
-      response = await request.send();
+      response = await http.post(
+          url,
+          body: fields,
+      );
     } catch (e) {
       print(e);
       return false;
     }
     print(response.statusCode);
-    print(await response.stream.bytesToString());
+    print(response.body);
 
     return response.statusCode == 200 || response.statusCode == 201;
   }

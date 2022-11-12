@@ -263,7 +263,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
     }
 
     RequestFromServer request = videoRequestsManager.requestById[selectedRequestId]!;
-    if(!request.active || request.distance(location.currentLocation.latitude, location.currentLocation.longitude) > 1000) {
+    if(!request.captured && (!request.active || request.distance(location.currentLocation.latitude, location.currentLocation.longitude) > 1000)) {
       String message = 'You are too far, please come closer.';
       if(request.timeWindowPassed) {
         message = 'Too late ¯\\_(ツ)_/¯. Try another one.'; 
@@ -427,11 +427,12 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         BitmapDescriptor? thumbnail = videoRequestsManager.thumbnailById[request.requestId];
         if(thumbnail != null) {
           var marker = Marker(
-            markerId: MarkerId('video_location_${request.requestId}'),
+            markerId: MarkerId('video_icon_${request.requestId}'),
             position: LatLng(request.latitude, request.longitude),
             icon: thumbnail,
-            onTap: () {
+            onTap: () async {
               print('selected ${request.requestId}');
+              await location.updateLocation();
               setState(() {
                 selectedRequestId = request.requestId;
               });
@@ -444,11 +445,13 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
       var marker = LabelMarker(
         label: message,
-        markerId: MarkerId('video_location_${request.requestId}'),
+        markerId: MarkerId('video_label_${request.requestId}'),
         position: LatLng(request.latitude, request.longitude),
         backgroundColor: color,
-        onTap: () {
+        anchor: const Offset(0.5, 1.4),
+        onTap: () async {
           print('selected ${request.requestId}');
+          await location.updateLocation();
           setState(() {
             selectedRequestId = request.requestId;
           });
@@ -467,11 +470,11 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
         var cameraMarker = Marker(
           // This marker id can be anything that uniquely identifies each marker.
-          markerId: MarkerId('camera_marker'),
+          markerId: MarkerId('camera_marker_${request.requestId}'),
           position: LatLng(request.latitude, request.longitude),
           icon: cameraIcon!,
           draggable: false,
-          anchor: const Offset(0.5, 1),
+          anchor: const Offset(0.5, 0.5),
           rotation: request.direction,
         );
 
