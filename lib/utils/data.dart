@@ -39,7 +39,7 @@ class VideoRequestData {
       this.latitude=0.0,
       this.longitude=0.0,
       this.startTimestamp=0,
-      this.secondsDuration=3600,
+      this.secondsDuration=3600 * 2,
       this.direction=0.0,
       this.txHash='',
     }

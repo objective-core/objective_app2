@@ -434,6 +434,9 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
             icon: thumbnail,
             onTap: () async {
               print('selected ${request.requestId}');
+              setState(() {
+                selectedRequestId = request.requestId;
+              });
               await location.updateLocation();
               setState(() {
                 selectedRequestId = request.requestId;
@@ -453,6 +456,9 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         anchor: const Offset(0.5, 1.4),
         onTap: () async {
           print('selected ${request.requestId}');
+          setState(() {
+            selectedRequestId = request.requestId;
+          });
           await location.updateLocation();
           setState(() {
             selectedRequestId = request.requestId;
@@ -478,6 +484,16 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           draggable: false,
           anchor: const Offset(0.5, 0.5),
           rotation: request.direction,
+          onTap: () async {
+            print('selected ${request.requestId}');
+            setState(() {
+              selectedRequestId = request.requestId;
+            });
+            await location.updateLocation();
+            setState(() {
+              selectedRequestId = request.requestId;
+            });
+          }
         );
 
         _requestMarkers.add(cameraMarker);

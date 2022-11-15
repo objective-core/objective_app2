@@ -313,7 +313,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           latitude: data.currentPosition!.latitude,
           longitude: data.currentPosition!.longitude,
           startTimestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          secondsDuration: 3600,
+          secondsDuration: 3600 * 2,
         );
 
         cameraIcon = await BitmapDescriptor.fromAssetImage(

@@ -90,6 +90,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   void initState() {
     motionSensors.magnetometerUpdateInterval = 20000;
     motionSensors.accelerometerUpdateInterval = 20000;
+
     magnetometerStream = motionSensors.magnetometer.listen((MagnetometerEvent event) {
       // print('direction: ${90 - 180.0 * atan2(event.y, event.x) / pi}');
     });

@@ -138,7 +138,7 @@ class VideoRequestsManager {
   }
 
 
-  Future<List<RequestFromServer>> getRequests({double lat=-1, double long=-1, int radius=1000}) async {
+  Future<List<RequestFromServer>> getRequests({double lat=-1, double long=-1, int radius=20}) async {
     Map<String, String> parameters = {};
 
     if(lat != -1 && long != -1) {

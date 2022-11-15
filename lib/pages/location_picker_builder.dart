@@ -296,7 +296,7 @@ class LocationPickerBuilder {
       latitude: latitude,
       longitude: longitude,
       startTimestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      secondsDuration: 3600,
+      secondsDuration: 3600 * 2,
     );
 
     cameraIcon = await BitmapDescriptor.fromAssetImage(

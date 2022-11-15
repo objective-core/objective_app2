@@ -5,6 +5,7 @@ import 'package:walletconnect_secure_storage/walletconnect_secure_storage.dart';
 import 'package:web3dart/web3dart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 
 typedef OnLogin = void Function(Account account);
 typedef OnLogout = void Function();
@@ -79,7 +80,7 @@ class LoginModel {
   login() async {
     await initConnector();
 
-    print('login func ${loggedIn}, ${connector!.connected}');
+    printWC('login func ${loggedIn}, ${connector!.connected}');
 
     if (!connector!.connected) {
       await connector!.createSession(onDisplayUri: (connectionUri) async {
@@ -95,12 +96,16 @@ class LoginModel {
     }
   }
 
+  printWC(message) {
+    print('WC: $message');
+  }
+
   Future<void> initConnector() async {
     if(connector != null) {
       return;
     }
 
-    print('initConnector');
+    printWC('initConnector');
     sessionStorage = WalletConnectSecureStorage();
 
     var session = await sessionStorage.getSession();
@@ -119,52 +124,62 @@ class LoginModel {
         ])
     );
 
-    // Supported events: connect, disconnect, session_request, session_update
-    connector!.on('connect', (_) {
-      print('connected');
-      connectedAccount = Account(connector!.session.accounts.first, connector!.session.chainId);
-      onLogin(connectedAccount!);
-    });
+    connector!.registerListeners(
+      onConnect: (SessionStatus status) {
+        printWC('onConnect ${status}');
+        connectedAccount = Account.fromSession(connector!.session);
+        onLogin(connectedAccount!);
+      },
+      onSessionUpdate: (WCSessionUpdateResponse response) {
+        printWC('onSessionUpdate ${response}');
+        connectedAccount = Account.fromSession(connector!.session);
+        onUpdate(connectedAccount!);
+      },
+      onDisconnect: () {
+        printWC('onDisconnect');
+        connectedAccount = null;
+        onLogout();
+      },
+    );
 
-    connector!.on('session_update', (_) {
-      print('session_update');
-      connectedAccount = Account(connector!.session.accounts.first, connector!.session.chainId);
-      onUpdate(connectedAccount!);
-    });
-
-    connector!.on('session_request', (_) {
-      print('session_request');
-      connectedAccount = Account(connector!.session.accounts.first, connector!.session.chainId);
-      onUpdate(connectedAccount!);
-    });
-
-    connector!.on('disconnect', (_) {
-      print('disconnect');
-      connectedAccount = null;
-      onLogout();
-    });
-
-    if(connector!.connected) {
-      connectedAccount = Account.fromSession(connector!.session);
+    if(connector!.connected && session != null) {
+      printWC('restoring account from session, connector connected');
+      connectedAccount = Account.fromSession(session);
       onLogin(connectedAccount!);
     }
   }
 
   Future<String> signMessageWithMetamask(String message) async {
     if (connector!.connected) {
-      print("Message received");
-      print(message);
+      // printWC('reconnecting just in fucking case...');
+      // connector!.reconnect();
+      printWC("Message received");
+      printWC(message);
 
       EthereumWalletConnectProvider provider =
           EthereumWalletConnectProvider(connector!);
 
       launchUrlString(uri!, mode: LaunchMode.externalApplication);
 
-      return await provider.personalSign(
+      printWC('signing message');
+      Future<dynamic> future =  provider.personalSign(
         message: message,
         address: connector!.session.accounts[0],
         password: '',
       );
+
+      Completer<dynamic> completer = Completer();
+      future.then(completer.complete).catchError(completer.completeError);
+
+      while(true) {
+        await Future.delayed(const Duration(seconds: 1));
+        printWC('sign completer.isCompleted: ${completer.isCompleted}');
+        if(completer.isCompleted) {
+          break;
+        }
+      }
+
+      return await future;
     }
 
     // TODO: raise exception?
@@ -187,51 +202,63 @@ class LoginModel {
 
   Future<bool> sendTxViaMetamask(VideoRequestData request) async {
     if (connector!.connected) {
-      try {
-        print("Sending transaction");
-        print(request.getIntegerDirection());
-        print(request.getIntegerLatitude());
-        print(request.getIntegerLongitude());
-        print(request.startTimestamp);
-        print(request.getIntegerEndTimestamp());
+      // printWC('reconnecting just in fucking case...');
 
-        var function_address = 'd8484ca7';
-        var requestId = 1;
-        var contractAddress = '0xa8cbf99c7ea18a8e6a2ea34619609a0aa9e77211';
+      try {
+        printWC("Sending transaction");
+        printWC(request.getIntegerDirection());
+        printWC(request.getIntegerLatitude());
+        printWC(request.getIntegerLongitude());
+        printWC(request.startTimestamp);
+        printWC(request.getIntegerEndTimestamp());
+
+        var contractAddress = '0xC6ea1442139Fd2938098E638213302b05DDD6CC6';
 
         DeployedContract contract = await getContract();
         ContractFunction function = contract.function("submitRequest");
 
-        print('constracting data');
+        printWC('constracting data');
         var data_bytes = function.encodeCall([
-            "1",
             BigInt.from(request.getIntegerLatitude()),
             BigInt.from(request.getIntegerLongitude()),
             BigInt.from(request.startTimestamp),
             BigInt.from(request.getIntegerEndTimestamp()),
             BigInt.from(request.getIntegerDirection()),
         ]);
-        print(data_bytes);
+        printWC(data_bytes);
 
         EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(connector!, chainId: 5);
         launchUrlString(uri!, mode: LaunchMode.externalApplication);
 
-        var tx = await provider.sendTransaction(
+        Future<dynamic> future = provider.sendTransaction(
           from: connector!.session.accounts[0],
           to: contractAddress,
-          value: EtherAmount.fromUnitAndValue(EtherUnit.finney, BigInt.from(1)).getInWei,
+          value: EtherAmount.fromUnitAndValue(EtherUnit.finney, BigInt.from(50)).getInWei,
           gasPrice: EtherAmount.fromUnitAndValue(EtherUnit.gwei, BigInt.from(100)).getInWei, // get gas price estimation from somewhere.
           gas: 150000, // default: 90000
           data: data_bytes,
         );
 
-        print(tx);
+        Completer<dynamic> completer = Completer();
+        future.then(completer.complete).catchError(completer.completeError);
+
+        while(true) {
+          await Future.delayed(const Duration(seconds: 1));
+          printWC('sendTx completer.isCompleted: ${completer.isCompleted}');
+          if(completer.isCompleted) {
+            break;
+          }
+        }
+
+        var tx = await future;
+
+        printWC(tx);
         request.txHash = tx;
         return true;
       } catch (exp) {
-        print("Error while sending transaction");
-        print(exp);
-        print(exp.toString());
+        printWC("Error while sending transaction");
+        printWC(exp);
+        printWC(exp.toString());
       }
     }
     return false;

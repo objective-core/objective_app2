@@ -86,9 +86,21 @@
 		"inputs": [
 			{
 				"indexed": false,
+				"internalType": "uint256",
+				"name": "requestId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
 				"internalType": "string",
-				"name": "url",
+				"name": "cid",
 				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "uploader",
+				"type": "address"
 			}
 		],
 		"name": "VideoReceived",
@@ -97,6 +109,12 @@
 	{
 		"anonymous": false,
 		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "requestId",
+				"type": "uint256"
+			},
 			{
 				"indexed": false,
 				"internalType": "address",
@@ -153,9 +171,9 @@
 	{
 		"inputs": [
 			{
-				"internalType": "string",
+				"internalType": "uint256",
 				"name": "id",
-				"type": "string"
+				"type": "uint256"
 			}
 		],
 		"name": "checkRequest",
@@ -166,19 +184,51 @@
 	{
 		"inputs": [
 			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "decode",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "addr",
+				"type": "address"
+			},
+			{
+				"internalType": "string",
+				"name": "cid",
+				"type": "string"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			}
+		],
+		"name": "dropChainlinkRequestId",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "bytes32",
-				"name": "requestId",
+				"name": "_requestId",
 				"type": "bytes32"
 			},
 			{
-				"internalType": "string",
-				"name": "urlResponse",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "idResponse",
-				"type": "string"
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
 			}
 		],
 		"name": "fulfillVideoRequest",
@@ -189,16 +239,16 @@
 	{
 		"inputs": [
 			{
-				"internalType": "string",
+				"internalType": "uint256",
 				"name": "id",
-				"type": "string"
+				"type": "uint256"
 			}
 		],
-		"name": "getUrl",
+		"name": "getCid",
 		"outputs": [
 			{
 				"internalType": "string",
-				"name": "url",
+				"name": "cid",
 				"type": "string"
 			}
 		],
@@ -220,11 +270,6 @@
 	},
 	{
 		"inputs": [
-			{
-				"internalType": "string",
-				"name": "id",
-				"type": "string"
-			},
 			{
 				"internalType": "uint32",
 				"name": "lat",
