@@ -71,19 +71,21 @@ class VideoRequestsManager {
   List<RequestFromServer> nearbyRequests = [];
   Map<String, RequestFromServer> requestById = {};
   Map<String, BitmapDescriptor> thumbnailById = {};
+  Map<String, BitmapDescriptor> activeThumbnailById = {};
 
   final OnNearbyRequestsUpdate onNearbyRequestsUpdate;
 
   double _lastLat = -1;
   double _lastLong = -1;
+  int _radius = 5000;
 
   bool _loopStarted = false;
 
   VideoRequestsManager({required this.onNearbyRequestsUpdate});
 
-  Future<List<RequestFromServer>> refreshRequestsNearby(double lat, double long) async {
+  Future<List<RequestFromServer>> refreshRequestsNearby(double lat, double long, int radius) async {
     try {
-      nearbyRequests = await getRequests(lat: lat, long: long);
+      nearbyRequests = await getRequests(lat: lat, long: long, radius: radius);
     } catch (e) {
       print(e);
       return nearbyRequests;
@@ -92,8 +94,8 @@ class VideoRequestsManager {
     return nearbyRequests;
   }
 
-  Future<List<RequestFromServer>> startRefreshLoop(double lat, double long) async {
-    nearbyRequests = await refreshRequestsNearby(lat, long);
+  Future<List<RequestFromServer>> startRefreshLoop(double lat, double long, int radius) async {
+    nearbyRequests = await refreshRequestsNearby(lat, long, radius);
 
     _lastLat = lat;
     _lastLong = long;
@@ -105,10 +107,16 @@ class VideoRequestsManager {
     return nearbyRequests;
   }
 
+  void updateTargetLocation(double lat, double long, int radius) {
+    _lastLat = lat;
+    _lastLong = long;
+    _radius = radius;
+  }
+
   Future<void> loopRefreshNearby() async {
     while(true) {
       await Future.delayed(const Duration(seconds: 5));
-      await refreshRequestsNearby(_lastLat, _lastLong);
+      await refreshRequestsNearby(_lastLat, _lastLong, _radius);
     }
   }
 
@@ -117,28 +125,39 @@ class VideoRequestsManager {
       return;
     }
 
-    // already loaded
-    if(thumbnailById[request.requestId] != null) {
-      return;
-    }
-
-    print('loading ${request.thumbnail} ${request.requestId}');
-
     try{
-      thumbnailById[request.requestId] = await MarkerIcon.downloadResizePictureCircle(
-        request.thumbnail,
-        size: 150,
-        addBorder: true,
-        borderColor: Colors.yellow,
-        borderSize: 10,
-      );
+      if(thumbnailById[request.requestId] == null) {
+        print('loading ${request.thumbnail} ${request.requestId}');
+        thumbnailById[request.requestId] = await MarkerIcon.downloadResizePictureCircle(
+          request.thumbnail,
+          size: 150,
+          addBorder: true,
+          borderColor: Colors.yellow,
+          borderSize: 10,
+        );
+      }
+
+      if(activeThumbnailById[request.requestId] == null) {
+        print('loading ${request.thumbnail} ${request.requestId}');
+        activeThumbnailById[request.requestId] = await MarkerIcon.downloadResizePictureCircle(
+          request.thumbnail,
+          size: 150,
+          addBorder: true,
+          borderColor: Colors.yellow,
+          borderSize: 20,
+        );
+      }
     } catch(e) {
       print(e);
     }
   }
 
+  int radius(double googleZoomLevel) {
+    return min(40000000, (((40000000 / (2 ^ googleZoomLevel.round())) * 2))).truncate();
+  }
 
-  Future<List<RequestFromServer>> getRequests({double lat=-1, double long=-1, int radius=20}) async {
+
+  Future<List<RequestFromServer>> getRequests({double lat=-1, double long=-1, int radius=5000}) async {
     Map<String, String> parameters = {};
 
     if(lat != -1 && long != -1) {
@@ -146,7 +165,8 @@ class VideoRequestsManager {
       parameters['long'] = long.toString();
       parameters['radius'] = radius.toString();
       parameters['hide_expired'] = 'true';
-      parameters['since_seconds'] = '86400';
+      parameters['since_seconds'] = '186400';
+      // parameters['since_seconds'] = '3600';
     }
 
     Response dioResponse = await dio.get(
@@ -171,7 +191,7 @@ class VideoRequestsManager {
         reward: request['reward'],
         videoUrl: request['video'] == null ? '' : 'https://ipfs.objective.camera/${request['video']['file_hash']}',
         thumbnail: request['video'] == null ? '' : 'https://ipfs.objective.camera/thumbnails/${request['video']['file_hash']}.png',
-        action: ((request['location']['direction'] + 90) + Random().nextInt(180)) % 360,
+        action: request['second_direction'],
       );
       loadThumbnail(requestFromServer);
       requestById[requestFromServer.requestId] = requestFromServer;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'dart:typed_data';
 import 'package:async/async.dart';
 import 'dart:io';
 import 'dart:math';
@@ -38,7 +37,7 @@ class RecorderPage extends StatefulWidget {
 // 1. Page shows camera steam preview
 // 2. When stream is verified (direction / location / phone orientation) button record becomes available
 // 3. When button record is pressed, camera stream is recorded until verification requuriements met.
-// 3.1 Video should contain at least 10 seconds of requested direction.
+// 3.1 Video should contain at least 7 seconds of requested direction.
 // 3.2 Video should contain executed actions (turn to random direction)
 // 3.3 Video should not be longer than 30 seconds.
 // 4. If all requirements met, video is uploaded to server.
@@ -57,10 +56,15 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   var verticalThreshold = 8.0;
   var heading = 0.0;
 
+  var popping = false;
+
   // start to calculate on video start;
   var averageHeading = 0.0;
   var headingSum = 0.0;
   var headingCount = 0;
+
+  var in_direction_requirement = 6.0;
+  var in_action_requirement = 3.0;
 
   var requestedDirectionCaptured = 0.0;
   var actionDirectionCaptured = 0.0;
@@ -71,29 +75,26 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
   var isVideoRecording = false;
   var uploading = false;
-  var initialized = false;
+  bool? verified;
+  var initializationInProgress = false;
   double uploadingProgress = 0.0;
 
   var angleChangeTime;
 
-  var magnetometerStream, accelerometerStream, compassStream;
+  var accelerometerStream, compassStream;
 
   double get targetDiffernce => ((videoRequest!.direction) - (heading + 360) % 360) % 360;
   double get actionDiffernce => ((videoRequest!.action) - (heading + 360) % 360) % 360;
   bool get targetVerified => ((targetDiffernce < 20 || targetDiffernce > 340) && averageGravity >= 8.0);
   bool get actionVerified => ((actionDiffernce < 20 || actionDiffernce > 340) && averageGravity >= 8.0);
-  int get timeLeft => max(30 - ((DateTime.now().millisecondsSinceEpoch - video!.startTime.millisecondsSinceEpoch) / 1000.0).truncate(), 0);
+  int get timeLeft => max(20 - ((DateTime.now().millisecondsSinceEpoch - video!.startTime.millisecondsSinceEpoch) / 1000.0).truncate(), 0);
 
   bool get goodToStartRecording => controller != null && targetVerified && !uploading;
 
   @override
   void initState() {
-    motionSensors.magnetometerUpdateInterval = 20000;
     motionSensors.accelerometerUpdateInterval = 20000;
 
-    magnetometerStream = motionSensors.magnetometer.listen((MagnetometerEvent event) {
-      // print('direction: ${90 - 180.0 * atan2(event.y, event.x) / pi}');
-    });
     accelerometerStream = motionSensors.accelerometer.listen((AccelerometerEvent event) {
       // print('accelerometer: ${event.x} ${event.y} ${event.z}');
       gravitySum += event.y;
@@ -109,12 +110,12 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       averageGravity = newAverageGravity;
 
       if(oldAverageGravity < verticalThreshold && newAverageGravity > verticalThreshold) { 
-        if (mounted) {
+        if (mounted && !popping) {
           setState(() {});
         }
 
       } else if (oldAverageGravity > verticalThreshold && newAverageGravity < verticalThreshold) {
-        if (mounted) {
+        if (mounted && !popping) {
           setState(() {});
         }
       }
@@ -125,7 +126,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       var previouseAngleChangeTime = angleChangeTime == null ? DateTime.now() : angleChangeTime;
       angleChangeTime = DateTime.now();
       heading = event.heading!;
-      print('heading $heading headingForCameraMode: ${event.headingForCameraMode} accuracy: ${event.accuracy}');
+      // print('heading $heading headingForCameraMode: ${event.headingForCameraMode} accuracy: ${event.accuracy}');
       // print('location heading ${location!.currentLocation.heading}');
 
       if(isVideoRecording) {
@@ -137,25 +138,29 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
           // print('requestedDirectionCaptured: $requestedDirectionCaptured seconds $angleChangeTime, $previouseAngleChangeTime');
         }
 
-        if(actionVerified && requestedDirectionCaptured > 10) {
+        if(actionVerified && requestedDirectionCaptured > in_direction_requirement) {
           actionDirectionCaptured += (angleChangeTime.millisecondsSinceEpoch - previouseAngleChangeTime.millisecondsSinceEpoch) / 1000;
           // print('actionDirectionCaptured: $actionDirectionCaptured seconds $angleChangeTime, $previouseAngleChangeTime');
 
-          if(actionDirectionCaptured > 5) {
+          if(actionDirectionCaptured > in_action_requirement) {
             // all good we captured enough.
-            stopVideoRecording();
+            if (mounted && !popping) {
+              stopVideoRecording();
+            }
           }
         }
 
         if(timeLeft == 0) {
           // captured enough, stop recording.
-          stopVideoRecording();
+          if (mounted && !popping) {
+            stopVideoRecording();
+          }
         }
       }
 
-       if (mounted) {
-          setState(() {});
-       }
+      if (mounted && !popping) {
+        setState(() {});
+      }
     });
 
     super.initState();
@@ -175,10 +180,8 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         if(isVideoRecording) {
           await cancelVideoRecording();
         }
-        if(controller != null) {
-          await controller!.dispose();
-          controller = null;
-        }
+
+        popping = true;
         return true;
       },
       child: FutureBuilder<bool>(
@@ -216,16 +219,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
                             decoration: TextDecoration.none,
                           ),
                         ),
-                        Text(
-                          uploadingProgress == 100 ? 'Connecting to metamask...' : '',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.normal,
-                            decoration: TextDecoration.none,
-                          ),
-                        ),
+                        buildStatusText(),
                         const SizedBox(height: 50,),
                         const CircularProgressIndicator(color: Colors.white)
                     ]),
@@ -275,6 +269,34 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     );
   }
 
+  Text buildStatusText() {
+    String message;
+    if(uploadingProgress < 100) {
+      message = '';
+    } else {
+      if(verified == null) {
+        message = 'Verifying video...';
+      } else {
+        if(verified!) {
+          message = 'Video verified, signing...';
+        } else {
+          message = 'Video not verified.';
+        }
+      }
+    }
+
+    return Text(
+      message,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 20,
+        fontWeight: FontWeight.normal,
+        decoration: TextDecoration.none,
+      ),
+    );
+  }
+
   List<Positioned> buildVerificatorWisgets(BuildContext context) {
     List<Positioned> result = [];
 
@@ -306,14 +328,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     var difference = targetDiffernce;
 
     Color arrowsColor = Colors.red;
-    if(isVideoRecording && requestedDirectionCaptured > 10) {
+    if(isVideoRecording && requestedDirectionCaptured > in_direction_requirement) {
       difference = actionDiffernce;
       arrowsColor = Colors.green;
     }
 
     // print('action: ${videoRequest!.action}, direction: ${videoRequest!.direction},  heading $heading difference: $difference');
 
-    if(targetVerified || (isVideoRecording && requestedDirectionCaptured > 10)) {
+    if(targetVerified || (isVideoRecording && requestedDirectionCaptured > in_direction_requirement)) {
       result.add(
         const Positioned(
             bottom: 140,
@@ -345,10 +367,10 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
           bottom: 20,
           left: 20,
           width: 43,
-          child: Text('${min(((requestedDirectionCaptured / 10.0) * 100).truncate(), 100)}%', style: TextStyle(
+          child: Text('${min(((requestedDirectionCaptured / in_direction_requirement) * 100).truncate(), 100)}%', style: TextStyle(
               color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              fontWeight: FontWeight.normal,
               decoration: TextDecoration.none,
             ),
             textAlign: TextAlign.right,
@@ -369,10 +391,10 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
           bottom: 20,
           left: 70,
           width: 43,
-          child: Text('${min(((actionDirectionCaptured / 5.0) * 100).truncate(), 100)}%', style: const TextStyle(
+          child: Text('${min(((actionDirectionCaptured / in_action_requirement) * 100).truncate(), 100)}%', style: const TextStyle(
               color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              fontWeight: FontWeight.normal,
               decoration: TextDecoration.none,
             ),
             textAlign: TextAlign.right,
@@ -493,10 +515,10 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       actionDirectionCaptured = 0.0;
       uploadingProgress = 0.0;
       isVideoRecording = true;
+      verified = null;
 
       await controller!.startVideoRecording();
-      setState(() {
-      });
+      if(!popping) {setState(() {});} else {return;}
     } catch (e) {
       print(e);
     }
@@ -504,10 +526,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
   Future<void> cancelVideoRecording() async {
     await controller!.stopVideoRecording();
-    setState(() {
+    if(!popping) {
+      setState(() {
       uploading = false;
       isVideoRecording = false;
     });
+    } else {
+      return;
+    }
   }
 
   Future<void> stopVideoRecording() async {
@@ -520,39 +546,122 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       isVideoRecording = false;
       var file = await controller!.stopVideoRecording();
 
-      if(!(requestedDirectionCaptured > 10 && actionDirectionCaptured > 5 && timeLeft > 0)) {
+      if(!(requestedDirectionCaptured > in_direction_requirement && actionDirectionCaptured > in_action_requirement && timeLeft > 0)) {
         print('verification is not passed');
+
+        showOKDialog(
+          context,
+          'You recorded wrong direction.',
+          'Please follow to instructions during recording the video, to meet expectations on recorded direction.',
+        );
+
         uploading = false;
         isVideoRecording = false;
         return;
       }
 
-      setState(() {
-      });
-
-      print('uploading...');
+      if(!popping) {setState(() {});} else {return;}
 
       video!.heading = (averageHeading + 360) % 360;
       video!.path = file.path;
-      video!.hash = await getFileCIDHash(file.path);
       video!.endTime = DateTime.now();
 
-      if(video!.hash == '') {
-        showAlertDialog(context, 'Error', 'Error uploading video, try again.');
+      print('uploading to ipfs...');
+      video!.hash = await getFileCIDHash(file.path);
+
+      print('got hash: ${video!.hash }');
+      if(!mounted) {return;}
+
+      while(video!.hash == '') {
+        bool retry = await showRetryDialog(context, 'Error', 'Error uploading video, try again.');
+        if(!retry) {
+          uploading = false;
+          isVideoRecording = false;
+          return;
+        }
+
+        // try to upload again
+        video!.hash = await getFileCIDHash(file.path);
+      }
+
+      print('video uploaded: ${video!.hash}');
+      if(!mounted) {return;}
+
+      print('verifying video...');
+      var url = 'https://api.objective.camera/verify/${video!.hash}/${videoRequest!.direction.truncate()}/${videoRequest!.action.truncate()}';
+      print('url: ${url}');
+
+      bool gotResponse = false;
+      while(!gotResponse) {
+        try {
+          Response dioResponse = await dio.get(url);
+          print(dioResponse.data);
+          verified = dioResponse.data['is_verified'];
+          gotResponse = true;
+        }  catch (e) {
+          print(e);
+
+          bool retry = await showRetryDialog(context, 'Error', 'Could not verify video on server.');
+          if(!retry) {
+            verified = false;
+            break;
+          }
+        }
+      }
+
+      // if not verified wait a bit and return. Camera should start again.
+      if(!verified!) {
+        showOKDialog(
+          context,
+          'Video is not verified.',
+          'Server could not verify video. It could be caused by moving objects in the video or by bad lighting conditions. Please try again.',
+        );
+
+        uploading = false;
+        verified = null;
+        if(!popping) {setState(() {});} else {return;}
         return;
       }
 
-      var messageToSign = 'video hash: ${video!.hash}';
-      video!.signature = await login!.signMessageWithMetamask(messageToSign);
+      print('video verified...');
+      if(!mounted) {return;}
+      if(!popping) {setState(() {});} else {return;}
 
-      print('signed ${video!.signature}');
-      var result = await uploadVideo();
-      if(result) {
+      var messageToSign = 'video hash: ${video!.hash}';
+      while(video!.signature == null || video!.signature == '') {
+        video!.signature = await login!.signMessageWithMetamask(messageToSign);
+        if(video!.signature == '') {
+          bool retry = await showRetryDialog(context, 'Error', 'Could not get signature from Metamask.');
+          if(!retry) {
+            uploading = false;
+            verified = null;
+            if(!popping) {setState(() {});} else {return;}
+            return;
+          }
+        }
+      }
+
+      print('video signed: ${video!.signature}');
+      if(!mounted) {return;}
+
+      bool uploaded = false;
+      while(!uploaded) {
+        uploaded = await uploadVideo();
+        if(!uploaded) {
+          bool retry = await showRetryDialog(context, 'Error', 'Error uploading video, try again.');
+          if(!retry) {
+            uploading = false;
+            return;
+          }
+        }
+      }
+
+      if(uploaded) {
+        // https://api.objective.camera/verify/QmPWhpsGM7zgMXrc3sSehJK4XQCrataXVkryw7yF2HZvXs/198/100
         Navigator.pop(context, video);
         print('uploaded.');
-      } else {
-        showAlertDialog(context, 'Error', 'Error uploading video, try again.');
       }
+
       uploading = false;
     } catch (e) {
       uploading = false;
@@ -597,19 +706,24 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   }
 
   Future<bool> initCamera() async {
-    if(initialized) {
-      return initialized;
+    if(initializationInProgress) {
+      print('initializing returned false');
+      return false;
     }
 
-    cameras = await availableCameras();
-    print('initCamera $cameras');
-    controller = CameraController(cameras[0], ResolutionPreset.veryHigh);
-    controller!.initialize().then((_) {
-      if (!mounted) {
-        return false;
-      }
-      setState(() {});
-    }).catchError((Object e) {
+    if(controller != null && controller!.value.isInitialized) {
+      return true;
+    }
+
+    initializationInProgress = true;
+
+    try {
+      cameras = await availableCameras();
+      print('initializing got camers: $cameras');
+      controller = CameraController(cameras[0], ResolutionPreset.veryHigh);
+      print('initializing created countroller, waiting for initialize...');
+      await controller!.initialize();
+    } catch(e) {
       if (e is CameraException) {
         switch (e.code) {
           case 'CameraAccessDenied':
@@ -619,10 +733,19 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
             print('Handle other errors.');
             break;
         }
+      } else {
+        print(e);
       }
-    });
-    initialized = true;
-    return initialized;
+    }
+
+    print('initializing done, isInitialized: ${controller != null? controller!.value.isInitialized : null}');
+    initializationInProgress = false;
+
+    if (!mounted || popping) {
+      return false;
+    }
+    setState(() {});
+    return true;
   }
 
   @override
@@ -632,15 +755,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       WidgetsBinding.instance.removeObserver(this);
 
       compassStream?.cancel();
-      magnetometerStream?.cancel();
       accelerometerStream?.cancel();
-
-      initialized = false;
 
       if(controller != null) {
         controller!.dispose();
         controller = null;
       }
+
+      initializationInProgress = false;
 
     } catch (e) {
       print(e);

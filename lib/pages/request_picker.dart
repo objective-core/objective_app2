@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'dart:math';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
 import 'package:map_location_picker/map_location_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:objective_app2/utils/data.dart';
@@ -68,6 +70,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         await videoRequestsManager.startRefreshLoop(
           position.latitude,
           position.longitude,
+          lastMapPosition != null ? videoRequestsManager.radius(lastMapPosition!.zoom) : 5000,
         );
         setState(() {});
       },
@@ -155,7 +158,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           mapType: MapType.hybrid,
           markers: buildMarkers(),
           zoomControlsEnabled: false,
-          myLocationButtonEnabled: false,
+          myLocationButtonEnabled: true,
           myLocationEnabled: true,
           onMapCreated: (GoogleMapController controller) {
             _controller.complete(controller);
@@ -165,7 +168,20 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           },
           onCameraMove: (position) {
             _mapAngle = position.bearing;
+
+            var prevMapPosition = lastMapPosition;
             lastMapPosition = position;
+
+            if(prevMapPosition != null && (prevMapPosition.zoom > 4 && position.zoom <= 4)) {
+              print('rebuild markers, due zoom increase');
+              rebuildRequestsMarkers();
+            }
+
+            videoRequestsManager.updateTargetLocation(
+              position.target.latitude,
+              position.target.longitude,
+              videoRequestsManager.radius(position.zoom),
+            );
           },
         )
       )];
@@ -203,7 +219,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
     String title = '${login.account.networkName} ${login.account.address.substring(0, 4)}...${login.account.address.substring(login.account.address.length - 4)}';
     if(!login.networkSupported) {
-      title = 'Network ${login.account.networkName} not supported';
+      title = 'Choose Goerli network in wallet';
     }
 
     return [
@@ -260,12 +276,13 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
   }
 
   List<Positioned> buildToCameraDialog(BuildContext context) {
+    bool active = PermissionsModel.allGranted && login.loggedIn && login.networkSupported;
     if(selectedRequestId == null || !PermissionsModel.allGranted) {
       return [];
     }
 
     RequestFromServer request = videoRequestsManager.requestById[selectedRequestId]!;
-    if(!request.captured && (!request.active || request.distance(location.currentLocation.latitude, location.currentLocation.longitude) > 1000)) {
+    if(!request.captured && (!request.active || request.distance(location.currentLocation.latitude, location.currentLocation.longitude) > (kReleaseMode ? 20 : 500))) {
       String message = 'You are too far, please come closer.';
       if(request.timeWindowPassed) {
         message = 'Too late ¯\\_(ツ)_/¯. Try another one.'; 
@@ -323,6 +340,8 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         ),
       ];
     }
+
+    if(!active) return [];
 
     if(!login.loggedIn) {
       return [
@@ -395,12 +414,31 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       return;
     }
 
+    bool needToConsolidate = false;
+    if(lastMapPosition != null && lastMapPosition!.zoom <= 4) {
+      needToConsolidate = true;
+    }
+
+    print('rebuildRequestsMarkers: need to consolidate: $needToConsolidate');
     print('rebuildRequestsMarkers ${videoRequestsManager.nearbyRequests.length}');
 
-    _requestMarkers = {};
+    Set<Marker> newRequestMarkers = {};
+
+    Set<String> locations = {};
 
     for(var i = 0; i < videoRequestsManager.nearbyRequests.length; i++) {
       RequestFromServer request = videoRequestsManager.nearbyRequests[i];
+
+      // show only limited number of requests per location
+      if(needToConsolidate) {
+        var location = '${request.latitude.truncate()} ${request.longitude.truncate()}';
+        if(locations.contains(location)) {
+          continue;
+        }
+        print('rebuildRequestsMarkers locations: $locations');
+        locations.add(location);
+      }
+
       String price = 'Ξ${request.reward.toDouble() / 1000000000000000000.toDouble()}';
 
       Duration timeToStart = request.timeToStart;
@@ -410,11 +448,13 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       bool captured = request.thumbnail != '';
 
       var color = Colors.blue;
+      var textColor = Colors.white;
       var message = '$price in ${request.timeLeftString}';
 
       if(captured) {
         message = '$price (captured)';
         color = Colors.yellow;
+        textColor = Colors.black;
       } else if(timeWindowPassed) {
         message = '$price (expired)';
         color = Colors.grey;
@@ -426,7 +466,10 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       }
 
       if(captured) {
-        BitmapDescriptor? thumbnail = videoRequestsManager.thumbnailById[request.requestId];
+        BitmapDescriptor? thumbnail = (selectedRequestId == request.requestId)
+          ? videoRequestsManager.activeThumbnailById[request.requestId]
+          : videoRequestsManager.thumbnailById[request.requestId];
+
         if(thumbnail != null) {
           var marker = Marker(
             markerId: MarkerId('video_icon_${request.requestId}'),
@@ -434,16 +477,16 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
             icon: thumbnail,
             onTap: () async {
               print('selected ${request.requestId}');
+              zoomToCoordinates(LatLng(request.latitude, request.longitude));
               setState(() {
                 selectedRequestId = request.requestId;
               });
               await location.updateLocation();
-              setState(() {
-                selectedRequestId = request.requestId;
-              });
+              // setState(() {
+              // });
             },
           );
-          _requestMarkers.add(marker);
+          newRequestMarkers.add(marker);
           continue;
         }
       }
@@ -453,9 +496,11 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         markerId: MarkerId('video_label_${request.requestId}'),
         position: LatLng(request.latitude, request.longitude),
         backgroundColor: color,
+        textStyle: TextStyle(color: textColor, fontSize: request.requestId == selectedRequestId ? 35 : 30),
         anchor: const Offset(0.5, 1.4),
         onTap: () async {
           print('selected ${request.requestId}');
+          zoomToCoordinates(LatLng(request.latitude, request.longitude));
           setState(() {
             selectedRequestId = request.requestId;
           });
@@ -466,7 +511,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         },
       );
 
-      await _requestMarkers.addLabelMarker(marker);
+      await newRequestMarkers.addLabelMarker(marker);
 
       if(!captured) {
         cameraIcon ??= await BitmapDescriptor.fromAssetImage(
@@ -486,6 +531,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           rotation: request.direction,
           onTap: () async {
             print('selected ${request.requestId}');
+            zoomToCoordinates(LatLng(request.latitude, request.longitude));
             setState(() {
               selectedRequestId = request.requestId;
             });
@@ -496,17 +542,29 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           }
         );
 
-        _requestMarkers.add(cameraMarker);
+        newRequestMarkers.add(cameraMarker);
       }
     }
 
+    _requestMarkers = newRequestMarkers;
     print('rebuild done ${_requestMarkers.length}');
   }
+
+  Future<void> zoomToCoordinates(LatLng target) async {
+    final GoogleMapController controller = await _controller.future;
+    double currentZoom = await controller.getZoomLevel();
+    controller.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(
+      target: target,
+      zoom: max(14.4746, currentZoom),
+      bearing: _mapAngle,),
+    ));
+  }
+
 
   List<Positioned> buildToLocationPickerButtons(BuildContext context) {
     Color color = const Color.fromARGB(255, 80, 80, 80);
 
-    bool active = PermissionsModel.allGranted && login.loggedIn;
+    bool active = PermissionsModel.allGranted && login.loggedIn && login.networkSupported;
 
     if(active) {
       color = Colors.white;
@@ -531,6 +589,7 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
                 lat = lastMapPosition!.target.latitude;
                 long = lastMapPosition!.target.longitude;
               }
+              locationPickerBuilder.resetTimeShift(context);
               Marker marker = await locationPickerBuilder.buildMarker(
                 context,
                 lat,

@@ -144,22 +144,29 @@ class LoginModel {
 
     if(connector!.connected && session != null) {
       printWC('restoring account from session, connector connected');
+      printWC('session: $session, ${session.clientId} ${session.peerMeta} ${session.key}');
       connectedAccount = Account.fromSession(session);
       onLogin(connectedAccount!);
     }
   }
 
-  Future<String> signMessageWithMetamask(String message) async {
+  Future<String> signMessageWithMetamask(String message, {bool withReconnect = false}) async {
     if (connector!.connected) {
       // printWC('reconnecting just in fucking case...');
       // connector!.reconnect();
       printWC("Message received");
       printWC(message);
 
+      // always do reconnect before action.
+      connector!.reconnect();
+
       EthereumWalletConnectProvider provider =
           EthereumWalletConnectProvider(connector!);
 
-      launchUrlString(uri!, mode: LaunchMode.externalApplication);
+      launchUrlString(uri!.split('?bridge')[0], mode: LaunchMode.externalApplication);
+      await Future.delayed(Duration(seconds: 3));
+
+      print('${connector!.session.handshakeTopic}, ${connector!.session.peerId}');
 
       printWC('signing message');
       Future<dynamic> future =  provider.personalSign(
@@ -171,11 +178,17 @@ class LoginModel {
       Completer<dynamic> completer = Completer();
       future.then(completer.complete).catchError(completer.completeError);
 
+      int count = 0;
       while(true) {
         await Future.delayed(const Duration(seconds: 1));
         printWC('sign completer.isCompleted: ${completer.isCompleted}');
         if(completer.isCompleted) {
           break;
+        }
+
+        count++;
+        if(count > 30) {
+          return '';
         }
       }
 
@@ -200,9 +213,14 @@ class LoginModel {
     return contract;
   }
 
-  Future<bool> sendTxViaMetamask(VideoRequestData request) async {
+  Future<bool> sendTxViaMetamask(VideoRequestData request, {bool mock_result = false}) async {
+    if(mock_result) {
+      return false;
+    }
     if (connector!.connected) {
-      // printWC('reconnecting just in fucking case...');
+      printWC('reconnecting just in fucking case...');
+      // always do reconnect before action.
+      connector!.reconnect();
 
       try {
         printWC("Sending transaction");
@@ -228,13 +246,17 @@ class LoginModel {
         printWC(data_bytes);
 
         EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(connector!, chainId: 5);
-        launchUrlString(uri!, mode: LaunchMode.externalApplication);
+        // launchUrlString(uri!.split('?bridge')[0], mode: LaunchMode.externalApplication);
+
+        launchUrlString(uri!.split('?bridge')[0], mode: LaunchMode.externalApplication);
+        await Future.delayed(Duration(seconds: 3));
+
 
         Future<dynamic> future = provider.sendTransaction(
           from: connector!.session.accounts[0],
           to: contractAddress,
-          value: EtherAmount.fromUnitAndValue(EtherUnit.finney, BigInt.from(50)).getInWei,
-          gasPrice: EtherAmount.fromUnitAndValue(EtherUnit.gwei, BigInt.from(100)).getInWei, // get gas price estimation from somewhere.
+          value: EtherAmount.fromUnitAndValue(EtherUnit.finney, BigInt.from(25)).getInWei,
+          // gasPrice: EtherAmount.fromUnitAndValue(EtherUnit.gwei, BigInt.from(150)).getInWei, // TODO: get gas price estimation from somewhere.
           gas: 150000, // default: 90000
           data: data_bytes,
         );
@@ -242,11 +264,17 @@ class LoginModel {
         Completer<dynamic> completer = Completer();
         future.then(completer.complete).catchError(completer.completeError);
 
+        int count = 0;
         while(true) {
           await Future.delayed(const Duration(seconds: 1));
           printWC('sendTx completer.isCompleted: ${completer.isCompleted}');
           if(completer.isCompleted) {
             break;
+          }
+
+          count++;
+          if(count > 60) {
+            return false;
           }
         }
 

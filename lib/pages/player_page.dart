@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter/services.dart';
 
 import 'package:objective_app2/models/requests.dart';
 
@@ -43,16 +44,38 @@ class _PlayerPageState extends State<PlayerPage> {
                 )
               : CircularProgressIndicator(color: Colors.white),
         ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: Colors.white,
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          child: Icon(
-            Icons.close,
-            color: Colors.black,
+        persistentFooterButtons: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: widget.request.videoUrl));
+            },
+            child: const Icon(
+              Icons.copy,
+              color: Colors.white,
+            ),
           ),
-        ),
+          TextButton(
+            onPressed: () {
+              _controller.value.isPlaying
+                  ? _controller.pause()
+                  : _controller.play();
+                setState(() {});
+            },
+            child: Icon(
+               _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+              color: Colors.white,
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Icon(
+              Icons.close,
+              color: Colors.white,
+            ),
+          )
+        ],
       ),
     );
   }

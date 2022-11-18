@@ -1,16 +1,18 @@
-# objective_app2
+# Objective Camera Mobile application (Android and iOS)
 
-A new Flutter project.
+Objective Camera is a [Chainlink Fall 2022 Hackathon](https://chainlinkfall2022.devpost.com) project.
+It aims to build a tamper proof mobile camera application and video distribution channel using Web3 technology stack.
+For more detail see the [hackaton submission](https://devpost.com/software/objective).
 
-## Getting Started
+_Disclaimer: this project is a quick and dirty implementation of the Objective Camera fronted and is not ready for production use._
 
-This project is a starting point for a Flutter application.
+The purpose of the app is the following:
 
-A few resources to get you started if this is your first Flutter project:
+1. Browse freshly recorded videos
+2. Integrate to Metamask
+3. Ability to publish video request via smart contract function to blockchain
+4. Record verifiable video.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## License
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+This project is licensed under the Apache License 2.0 License - see the [LICENSE](LICENSE) file for details.

@@ -17,6 +17,7 @@ import 'package:label_marker/label_marker.dart';
 import 'package:objective_app2/models/location.dart';
 import 'package:objective_app2/models/login.dart';
 import 'package:objective_app2/models/requests.dart';
+import 'package:objective_app2/pages/alert_dialog.dart';
 
 
 typedef CameraMarkerOnStartUpdate = void Function(Marker marker);
@@ -41,7 +42,7 @@ class LocationPickerBuilder {
     // Models
     LocationModel? location;
     LoginModel? login;
-    late VideoRequestData videoRequest;
+    VideoRequestData? videoRequest;
 
     // Callbacks
     CameraMarkerUpdated onCameraMarkerUpdated;
@@ -132,22 +133,23 @@ class LocationPickerBuilder {
               directionShift = shift;
               refreshCameraMarker(context);
             },
-          ) : ScrollWithScale( // Time selector
+          ) : ScrollWithScaleForTime( // Time selector
             numberOfBars: 16,
+            duration: Duration(milliseconds: 200),
             onStartCallback: () {
               timeConfirmed = false;
-              onVideoRequestUpdated(videoRequest);
+              onVideoRequestUpdated(videoRequest!);
             },
             onUpdateCallback: (shift) {
               timeShift = shift;
-              videoRequest.startTimestamp = calculateSelectedTime(context).millisecondsSinceEpoch ~/ 1000;
-              onVideoRequestUpdated(videoRequest);
+              videoRequest!.startTimestamp = calculateSelectedTime(context).millisecondsSinceEpoch ~/ 1000;
+              onVideoRequestUpdated(videoRequest!);
             },
             onStopCallback: () {},
             onAnimationCallback: (shift) {
               timeShift = shift;
-              videoRequest.startTimestamp = calculateSelectedTime(context).millisecondsSinceEpoch ~/ 1000;
-              onVideoRequestUpdated(videoRequest);
+              videoRequest!.startTimestamp = calculateSelectedTime(context).millisecondsSinceEpoch ~/ 1000;
+              onVideoRequestUpdated(videoRequest!);
             },
             legendWidget: TimePickerCarousel(shift: timeShift, context: context),
           )
@@ -166,7 +168,7 @@ class LocationPickerBuilder {
                 iconSize: 50,
                 onPressed: () {
                   currentMode = PickerModes.location;
-                  onVideoRequestUpdated(videoRequest);
+                  onVideoRequestUpdated(videoRequest!);
                 }
               ),
               IconButton(
@@ -176,7 +178,7 @@ class LocationPickerBuilder {
                 iconSize: 50,
                 onPressed: () {
                   currentMode = PickerModes.period;
-                  onVideoRequestUpdated(videoRequest);
+                  onVideoRequestUpdated(videoRequest!);
                 },
               ),
             ],
@@ -201,12 +203,24 @@ class LocationPickerBuilder {
             height: 50,
             width: 100,
             child: TextButton(
-              child: Text('Submit', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
+              child: const Text('Submit', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () async {
                 print('Submitting');
-                bool sent = await login!.sendTxViaMetamask(videoRequest);
-                print('Submitted: $sent');
-                onVideoRequestSent(videoRequest);
+                bool sent = false;
+
+                while(!sent) {
+                  sent = await login!.sendTxViaMetamask(videoRequest!);
+                  print('Submitted: $sent');
+                  if(sent) {
+                    onVideoRequestSent(videoRequest!);
+                    break;
+                  } else {
+                    bool retry = await showRetryDialog(context, 'Error', 'Could not receive response from Metamask.');
+                    if(!retry) {
+                      break;
+                    }
+                  }
+                }
               }
             ),
         ) : (
@@ -221,7 +235,7 @@ class LocationPickerBuilder {
                 print('pressed Confirm why>>');
                 locationConfirmed = true;
                 currentMode = PickerModes.period;
-                onVideoRequestUpdated(videoRequest);
+                onVideoRequestUpdated(videoRequest!);
               }
             ),
           ) : Positioned(
@@ -235,12 +249,17 @@ class LocationPickerBuilder {
                 print('pressed Confirm');
                 timeConfirmed = true;
                 currentMode = PickerModes.period;
-                onVideoRequestUpdated(videoRequest);
+                onVideoRequestUpdated(videoRequest!);
               }
             ),
           )
         ),
       ];
+    }
+
+    void resetTimeShift(BuildContext context) {
+      timeShift = 0;
+      videoRequest?.startTimestamp = calculateSelectedTime(context).millisecondsSinceEpoch ~/ 1000;
     }
 
   // Future<void> _goToTheMarker() async {
@@ -258,9 +277,9 @@ class LocationPickerBuilder {
 
   void refreshCameraMarker(BuildContext context) {
     // call callback
-    videoRequest.latitude = markerPostion.latitude;
-    videoRequest.longitude = markerPostion.longitude;
-    videoRequest.direction = -(directionShift / MediaQuery.of(context).size.width) * 360;
+    videoRequest!.latitude = markerPostion.latitude;
+    videoRequest!.longitude = markerPostion.longitude;
+    videoRequest!.direction = -(directionShift / MediaQuery.of(context).size.width) * 360;
 
     _marker = _marker.copyWith(
       rotationParam: -(directionShift / MediaQuery.of(context).size.width) * 360,
@@ -272,7 +291,7 @@ class LocationPickerBuilder {
   }
 
   Duration calculateSelectedShift(BuildContext context) {
-    return Duration(minutes: (-timeShift ~/ ((MediaQuery.of(context).size.width / 16)).round()) * 15);
+    return Duration(minutes: (-timeShift / ((MediaQuery.of(context).size.width / 16)).round()).round() * 15);
   }
 
   DateTime calculateSelectedTime(BuildContext context) {
@@ -484,6 +503,28 @@ class ScrollPickerShadow extends StatelessWidget {
       )
     );
   }
+}
+
+class ScrollWithScaleForTime extends ScrollWithScale {
+  ScrollWithScaleForTime({
+    Key? key,
+    required ScrollWithScaleOnStartCallback onStartCallback,
+    required ScrollWithScaleOnUpdateCallback onUpdateCallback,
+    required ScrollWithScaleOnStopCallback onStopCallback,
+    required ScrollWithScaleOnAnimationCallback onAnimationCallback,
+    required Widget legendWidget,
+    required int numberOfBars,
+    required Duration duration,
+  }) : super(
+    key: key,
+    onStartCallback: onStartCallback,
+    onUpdateCallback: onUpdateCallback,
+    onStopCallback: onStopCallback,
+    onAnimationCallback: onAnimationCallback,
+    numberOfBars: numberOfBars,
+    duration: duration,
+    legendWidget: legendWidget,
+  );
 }
 
 class CompassLettersCarousel extends StatelessWidget {
