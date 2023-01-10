@@ -31,8 +31,6 @@ class _LoginPageState extends State<LoginPage> {
           await storage.write(key: 'wc-uri', value: uri);
           await launchUrlString(uri, mode: LaunchMode.externalApplication);
         });
-              print(session.accounts[0]);
-              print(session.chainId);
 
         if(session.chainId == 5) {
           Navigator.pushNamed(context, AppRoutes.requestPickerRoute, arguments: data);
@@ -47,13 +45,11 @@ class _LoginPageState extends State<LoginPage> {
     } else {
       _session = data.connector!.session;
       data.connectionUri = await storage.read(key: 'wc-uri');
-      print("already connected");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    print('buiding');
     // spawn a new connector;
     if (data.connector == null) {
       connectToWallet();
@@ -167,7 +163,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<bool> connectToWallet() async {
-    print('connect to wallet');
     sessionStorage = WalletConnectSecureStorage();
 
     var __session = await sessionStorage.getSession();
@@ -202,7 +197,6 @@ class _LoginPageState extends State<LoginPage> {
         'session_update',
         (payload) => setState(() {
               _session = payload;
-              print(payload);
             }));
     data.connector!.on(
         'disconnect',

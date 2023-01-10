@@ -105,10 +105,8 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         setState(() {});
       }),
       onVideoRequestCancel: () async {
-        print('onVideoRequestCancel called');
         pickingLocation = false;
         await rebuildRequestsMarkers();
-        print('_requestMarkers: ${_requestMarkers.length}');
         setState(() {});
       },
     );
@@ -144,7 +142,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
 
   List<Positioned> buildMap(BuildContext context) {
     if(location.locationAvailable || location.unableToLocate) {
-      print('buildMap ${buildMarkers().length}');
       return [Positioned(
         top: 100,
         left: 0,
@@ -163,9 +160,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           onMapCreated: (GoogleMapController controller) {
             _controller.complete(controller);
           },
-          onTap: (latlang) {
-            print(latlang);
-          },
           onCameraMove: (position) {
             _mapAngle = position.bearing;
 
@@ -173,7 +167,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
             lastMapPosition = position;
 
             if(prevMapPosition != null && (prevMapPosition.zoom > 4 && position.zoom <= 4)) {
-              print('rebuild markers, due zoom increase');
               rebuildRequestsMarkers();
             }
 
@@ -209,7 +202,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           child: TextButton(
             child: Text('Login', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
             onPressed: () async {
-              print('login');
               await login.login();
             }
           ),
@@ -326,8 +318,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
                   child: Text('Watch', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
                   onPressed: () async {
                     RequestFromServer request = videoRequestsManager.requestById[selectedRequestId]!;
-                    print(request.requestId);
-                    print(request.videoUrl);
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (BuildContext context) => PlayerPage(request: request)),
@@ -357,7 +347,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
                 child: TextButton(
                   child: Text('Login', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
                   onPressed: () async {
-                    print('login');
                     await login.login();
                   }
                 )
@@ -381,12 +370,10 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
               child: TextButton(
                 child: Text('Start Recording', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
                 onPressed: () async {
-                  print('pushing recorder');
                   var video = await Navigator.pushNamed(
                     context, AppRoutes.recorderRoute,
                     arguments: [location, login, videoRequestsManager.requestById[selectedRequestId]],
                   );
-                  print('Video captured: $video');
                 }
               )
             ),
@@ -419,9 +406,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
       needToConsolidate = true;
     }
 
-    print('rebuildRequestsMarkers: need to consolidate: $needToConsolidate');
-    print('rebuildRequestsMarkers ${videoRequestsManager.nearbyRequests.length}');
-
     Set<Marker> newRequestMarkers = {};
 
     Set<String> locations = {};
@@ -435,7 +419,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         if(locations.contains(location)) {
           continue;
         }
-        print('rebuildRequestsMarkers locations: $locations');
         locations.add(location);
       }
 
@@ -476,14 +459,11 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
             position: LatLng(request.latitude, request.longitude),
             icon: thumbnail,
             onTap: () async {
-              print('selected ${request.requestId}');
               zoomToCoordinates(LatLng(request.latitude, request.longitude));
               setState(() {
                 selectedRequestId = request.requestId;
               });
               await location.updateLocation();
-              // setState(() {
-              // });
             },
           );
           newRequestMarkers.add(marker);
@@ -499,7 +479,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
         textStyle: TextStyle(color: textColor, fontSize: request.requestId == selectedRequestId ? 35 : 30),
         anchor: const Offset(0.5, 1.4),
         onTap: () async {
-          print('selected ${request.requestId}');
           zoomToCoordinates(LatLng(request.latitude, request.longitude));
           setState(() {
             selectedRequestId = request.requestId;
@@ -519,8 +498,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           'assets/images/camera-small@2x.png'
         );
 
-        // print('direction: ${request.direction} ${request.latitude} ${request.longitude} ${request.requestId}');
-
         var cameraMarker = Marker(
           // This marker id can be anything that uniquely identifies each marker.
           markerId: MarkerId('camera_marker_${request.requestId}'),
@@ -530,7 +507,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
           anchor: const Offset(0.5, 0.5),
           rotation: request.direction,
           onTap: () async {
-            print('selected ${request.requestId}');
             zoomToCoordinates(LatLng(request.latitude, request.longitude));
             setState(() {
               selectedRequestId = request.requestId;
@@ -547,7 +523,6 @@ class _RequestPickerPageState extends State<RequestPickerPage> {
     }
 
     _requestMarkers = newRequestMarkers;
-    print('rebuild done ${_requestMarkers.length}');
   }
 
   Future<void> zoomToCoordinates(LatLng target) async {

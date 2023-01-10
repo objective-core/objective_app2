@@ -100,9 +100,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   onMapCreated: (GoogleMapController controller) {
                     _controller.complete(controller);
                   },
-                  onTap: (latlang){
-                    print(latlang);
-                  },
                   onCameraMove: (position) {
                     _mapAngle = position.bearing;
                     refreshCameraMarker(context);
@@ -211,7 +208,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 child: TextButton(
                   child: Text('Submit', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
                   onPressed: () {
-                    print('Submitting');
                     sendTxViaMetamask(context);
                     setState(() {
                       locationConfirmed = true;
@@ -228,7 +224,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 child: TextButton(
                   child: Text('Confirm Location', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
                   onPressed: () {
-                    print('pressed Confirm why>>');
                     setState(() {
                       locationConfirmed = true;
                       currentMode = PickerModes.period;
@@ -243,7 +238,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 child: TextButton(
                   child: Text('Confirm Time: ${DateFormat('HH:mm').format(calculateSelectedTime(context))}', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
                   onPressed: () {
-                    print('pressed Confirm');
                     setState(() {
                       timeConfirmed = true;
                       currentMode = PickerModes.period;
@@ -302,7 +296,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     DateTime time = calculateSelectedTime(context);
 
     String result =  DateFormat('yyyy/MM/dd HH:mm').format(time);
-    print('selected time: $time, result: $result');
     return result;
   }
 
@@ -423,9 +416,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
   Future<DeployedContract> getContract() async {
-      print('trying to load contract');
       String abi = await rootBundle.loadString("assets/contracts/VideoRequester.json");
-      print('contract loaded');
       String contractAddress = "0xe011eA99393AaB86E59fd57Ff4DbB48825E36290";
       String contractName = "VideoRequester";
 
@@ -434,21 +425,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         EthereumAddress.fromHex(contractAddress),
       );
 
-      print('deployed contract created');
-
       return contract;
     }
 
   sendTxViaMetamask(BuildContext context) async {
       if (data.connector!.connected) {
         try {
-          print("Sending transaction");
-          print(data.request!.getIntegerDirection());
-          print(data.request!.getIntegerLatitude());
-          print(data.request!.getIntegerLongitude());
-          print(data.request!.startTimestamp);
-          print(data.request!.getIntegerEndTimestamp());
-
           var function_address = 'd8484ca7';
           var requestId = 1;
           var contractAddress = '0xa8cbf99c7ea18a8e6a2ea34619609a0aa9e77211';
@@ -456,7 +438,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           DeployedContract contract = await getContract();
           ContractFunction function = contract.function("submitRequest");
 
-          print('constracting data');
           var data_bytes = function.encodeCall([
               "1",
               BigInt.from(data.request!.getIntegerLatitude()),
@@ -465,7 +446,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               BigInt.from(data.request!.getIntegerEndTimestamp()),
               BigInt.from(data.request!.getIntegerDirection()),
           ]);
-          print(data_bytes);
 
           EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(data.connector!, chainId: 5);
           launchUrlString(data.connectionUri!, mode: LaunchMode.externalApplication);
@@ -479,13 +459,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             data: data_bytes,
           );
 
-          print(tx);
           data.request!.txHash = tx;
           Navigator.pop(context);
-        } catch (exp) {
-          print("Error while sending transaction");
-          print(exp);
-          print(exp.toString());
+        } catch (e) {
+          print(e);
         }
       }
   }
@@ -721,8 +698,6 @@ class TimePickerCarousel extends StatelessWidget {
         effectiveShift = -(_shift.abs() % (containerWidth / 4));
       }
 
-      print('hoursShift: $hoursShift; shift: $_shift; effectiveShift: $effectiveShift');
-
       // position hours correctly.
       var times = [
         currentTime.subtract(const Duration(hours: 2)).add(Duration(hours: hoursShift)),
@@ -731,7 +706,6 @@ class TimePickerCarousel extends StatelessWidget {
         currentTime.add(const Duration(hours: 1)).add(Duration(hours: hoursShift)),
         currentTime.add(const Duration(hours: 2)).add(Duration(hours: hoursShift)),
       ];
-      print(times);
 
       var letterWidth = 60.0;
       List<Widget> children = [];
@@ -739,12 +713,10 @@ class TimePickerCarousel extends StatelessWidget {
       for(var i = 0; i < 5; i++) {
           DateTime hourDT = times[i];
           int dayDelta = -(currentTime.day - hourDT.day);
-          // print('adding hour $hourDT');
           // we can do this cause times are in order
           var defaultPosition = i * containerWidth / 4.0;
           // position of letter after applying shift
           var position = (defaultPosition + effectiveShift - letterWidth / 2.0);
-          // print(position);
           if(position >= 0 && position <= containerWidth - letterWidth) {
             children.add(
               Positioned(

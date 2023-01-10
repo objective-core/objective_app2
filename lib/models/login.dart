@@ -80,8 +80,6 @@ class LoginModel {
   login() async {
     await initConnector();
 
-    printWC('login func ${loggedIn}, ${connector!.connected}');
-
     if (!connector!.connected) {
       await connector!.createSession(onDisplayUri: (connectionUri) async {
         uri = connectionUri;
@@ -96,16 +94,11 @@ class LoginModel {
     }
   }
 
-  printWC(message) {
-    print('WC: $message');
-  }
-
   Future<void> initConnector() async {
     if(connector != null) {
       return;
     }
 
-    printWC('initConnector');
     sessionStorage = WalletConnectSecureStorage();
 
     var session = await sessionStorage.getSession();
@@ -126,25 +119,20 @@ class LoginModel {
 
     connector!.registerListeners(
       onConnect: (SessionStatus status) {
-        printWC('onConnect ${status}');
         connectedAccount = Account.fromSession(connector!.session);
         onLogin(connectedAccount!);
       },
       onSessionUpdate: (WCSessionUpdateResponse response) {
-        printWC('onSessionUpdate ${response}');
         connectedAccount = Account.fromSession(connector!.session);
         onUpdate(connectedAccount!);
       },
       onDisconnect: () {
-        printWC('onDisconnect');
         connectedAccount = null;
         onLogout();
       },
     );
 
     if(connector!.connected && session != null) {
-      printWC('restoring account from session, connector connected');
-      printWC('session: $session, ${session.clientId} ${session.peerMeta} ${session.key}');
       connectedAccount = Account.fromSession(session);
       onLogin(connectedAccount!);
     }
@@ -152,11 +140,6 @@ class LoginModel {
 
   Future<String> signMessageWithMetamask(String message, {bool withReconnect = false}) async {
     if (connector!.connected) {
-      // printWC('reconnecting just in fucking case...');
-      // connector!.reconnect();
-      printWC("Message received");
-      printWC(message);
-
       // always do reconnect before action.
       connector!.reconnect();
 
@@ -166,9 +149,6 @@ class LoginModel {
       launchUrlString(uri!.split('?bridge')[0], mode: LaunchMode.externalApplication);
       await Future.delayed(Duration(seconds: 3));
 
-      print('${connector!.session.handshakeTopic}, ${connector!.session.peerId}');
-
-      printWC('signing message');
       Future<dynamic> future =  provider.personalSign(
         message: message,
         address: connector!.session.accounts[0],
@@ -181,7 +161,7 @@ class LoginModel {
       int count = 0;
       while(true) {
         await Future.delayed(const Duration(seconds: 1));
-        printWC('sign completer.isCompleted: ${completer.isCompleted}');
+
         if(completer.isCompleted) {
           break;
         }
@@ -218,24 +198,15 @@ class LoginModel {
       return false;
     }
     if (connector!.connected) {
-      printWC('reconnecting just in fucking case...');
       // always do reconnect before action.
       connector!.reconnect();
 
       try {
-        printWC("Sending transaction");
-        printWC(request.getIntegerDirection());
-        printWC(request.getIntegerLatitude());
-        printWC(request.getIntegerLongitude());
-        printWC(request.startTimestamp);
-        printWC(request.getIntegerEndTimestamp());
-
         var contractAddress = '0xC6ea1442139Fd2938098E638213302b05DDD6CC6';
 
         DeployedContract contract = await getContract();
         ContractFunction function = contract.function("submitRequest");
 
-        printWC('constracting data');
         var data_bytes = function.encodeCall([
             BigInt.from(request.getIntegerLatitude()),
             BigInt.from(request.getIntegerLongitude()),
@@ -243,10 +214,8 @@ class LoginModel {
             BigInt.from(request.getIntegerEndTimestamp()),
             BigInt.from(request.getIntegerDirection()),
         ]);
-        printWC(data_bytes);
 
         EthereumWalletConnectProvider provider = EthereumWalletConnectProvider(connector!, chainId: 5);
-        // launchUrlString(uri!.split('?bridge')[0], mode: LaunchMode.externalApplication);
 
         launchUrlString(uri!.split('?bridge')[0], mode: LaunchMode.externalApplication);
         await Future.delayed(Duration(seconds: 3));
@@ -267,7 +236,6 @@ class LoginModel {
         int count = 0;
         while(true) {
           await Future.delayed(const Duration(seconds: 1));
-          printWC('sendTx completer.isCompleted: ${completer.isCompleted}');
           if(completer.isCompleted) {
             break;
           }
@@ -280,13 +248,10 @@ class LoginModel {
 
         var tx = await future;
 
-        printWC(tx);
         request.txHash = tx;
         return true;
-      } catch (exp) {
-        printWC("Error while sending transaction");
-        printWC(exp);
-        printWC(exp.toString());
+      } catch (e) {
+        print(e);
       }
     }
     return false;

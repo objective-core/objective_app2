@@ -5,7 +5,6 @@ showActionDialog(BuildContext context, title, message, String action) async {
   Widget closeButton = TextButton(
     child: const Text("Close"),
     onPressed: () {
-      print('Cancelling after $message');
       Navigator.pop(context, false);
     },
   );
@@ -13,7 +12,6 @@ showActionDialog(BuildContext context, title, message, String action) async {
   Widget retryButton = TextButton(
     child: Text(action),
     onPressed: () {
-      print('$action after $message');
       Navigator.pop(context, true);
     },
   );
@@ -45,7 +43,6 @@ showOKDialog(BuildContext context, title, message) async {
     Widget closeButton = TextButton(
       child: const Text("Ok"),
       onPressed: () {
-        print('Ok after $message');
         Navigator.pop(context, false);
       },
     );

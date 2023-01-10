@@ -96,7 +96,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     motionSensors.accelerometerUpdateInterval = 20000;
 
     accelerometerStream = motionSensors.accelerometer.listen((AccelerometerEvent event) {
-      // print('accelerometer: ${event.x} ${event.y} ${event.z}');
       gravitySum += event.y;
       gravityHistory.addLast(event.y);
 
@@ -119,15 +118,12 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
           setState(() {});
         }
       }
-      // print(averageGravity);
     });
 
     compassStream = FlutterCompass.events?.listen((CompassEvent event) {
       var previouseAngleChangeTime = angleChangeTime == null ? DateTime.now() : angleChangeTime;
       angleChangeTime = DateTime.now();
       heading = event.heading!;
-      // print('heading $heading headingForCameraMode: ${event.headingForCameraMode} accuracy: ${event.accuracy}');
-      // print('location heading ${location!.currentLocation.heading}');
 
       if(isVideoRecording) {
         headingSum += heading;
@@ -135,12 +131,10 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         averageHeading = headingSum / headingCount;
         if(targetVerified) {
           requestedDirectionCaptured += (angleChangeTime.millisecondsSinceEpoch - previouseAngleChangeTime.millisecondsSinceEpoch) / 1000;
-          // print('requestedDirectionCaptured: $requestedDirectionCaptured seconds $angleChangeTime, $previouseAngleChangeTime');
         }
 
         if(actionVerified && requestedDirectionCaptured > in_direction_requirement) {
           actionDirectionCaptured += (angleChangeTime.millisecondsSinceEpoch - previouseAngleChangeTime.millisecondsSinceEpoch) / 1000;
-          // print('actionDirectionCaptured: $actionDirectionCaptured seconds $angleChangeTime, $previouseAngleChangeTime');
 
           if(actionDirectionCaptured > in_action_requirement) {
             // all good we captured enough.
@@ -233,14 +227,11 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
                     height: 80,
                     child: RawMaterialButton(
                       onPressed: () {
-                        print('isVideoRecording $isVideoRecording $goodToStartRecording');
                         if (isVideoRecording) {
                           cancelVideoRecording();
                         } else {
                           if(goodToStartRecording) {
                             startVideoRecording();
-                          } else {
-                            print('can start recording $goodToStartRecording, $targetVerified, $uploading, $controller');
                           }
                         }
                       },
@@ -332,8 +323,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       difference = actionDiffernce;
       arrowsColor = Colors.green;
     }
-
-    // print('action: ${videoRequest!.action}, direction: ${videoRequest!.direction},  heading $heading difference: $difference');
 
     if(targetVerified || (isVideoRecording && requestedDirectionCaptured > in_direction_requirement)) {
       result.add(
@@ -547,8 +536,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       var file = await controller!.stopVideoRecording();
 
       if(!(requestedDirectionCaptured > in_direction_requirement && actionDirectionCaptured > in_action_requirement && timeLeft > 0)) {
-        print('verification is not passed');
-
         showOKDialog(
           context,
           'You recorded wrong direction.',
@@ -566,10 +553,8 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       video!.path = file.path;
       video!.endTime = DateTime.now();
 
-      print('uploading to ipfs...');
       video!.hash = await getFileCIDHash(file.path);
 
-      print('got hash: ${video!.hash }');
       if(!mounted) {return;}
 
       while(video!.hash == '') {
@@ -584,18 +569,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         video!.hash = await getFileCIDHash(file.path);
       }
 
-      print('video uploaded: ${video!.hash}');
       if(!mounted) {return;}
 
-      print('verifying video...');
       var url = 'https://api.objective.camera/verify/${video!.hash}/${videoRequest!.direction.truncate()}/${videoRequest!.action.truncate()}';
-      print('url: ${url}');
 
       bool gotResponse = false;
       while(!gotResponse) {
         try {
           Response dioResponse = await dio.get(url);
-          print(dioResponse.data);
           verified = dioResponse.data['is_verified'];
           gotResponse = true;
         }  catch (e) {
@@ -623,7 +604,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         return;
       }
 
-      print('video verified...');
       if(!mounted) {return;}
       if(!popping) {setState(() {});} else {return;}
 
@@ -641,7 +621,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         }
       }
 
-      print('video signed: ${video!.signature}');
       if(!mounted) {return;}
 
       bool uploaded = false;
@@ -657,9 +636,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       }
 
       if(uploaded) {
-        // https://api.objective.camera/verify/QmPWhpsGM7zgMXrc3sSehJK4XQCrataXVkryw7yF2HZvXs/198/100
         Navigator.pop(context, video);
-        print('uploaded.');
       }
 
       uploading = false;
@@ -701,13 +678,11 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     var cidHash = base58.encode(Uint8List.fromList(hex.decode(combined)));
     var fastCidHash = fast_base58.Base58Encode(hex.decode(combined));
     var actualCID = await uploadToIpfs(path);
-    print('cidHash: $cidHash, fastCidHash: $fastCidHash actualCID: $actualCID');
     return actualCID;
   }
 
   Future<bool> initCamera() async {
     if(initializationInProgress) {
-      print('initializing returned false');
       return false;
     }
 
@@ -719,18 +694,14 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
     try {
       cameras = await availableCameras();
-      print('initializing got camers: $cameras');
       controller = CameraController(cameras[0], ResolutionPreset.veryHigh);
-      print('initializing created countroller, waiting for initialize...');
       await controller!.initialize();
     } catch(e) {
       if (e is CameraException) {
         switch (e.code) {
           case 'CameraAccessDenied':
-            print('User denied camera access.');
             break;
           default:
-            print('Handle other errors.');
             break;
         }
       } else {
@@ -738,7 +709,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       }
     }
 
-    print('initializing done, isInitialized: ${controller != null? controller!.value.isInitialized : null}');
     initializationInProgress = false;
 
     if (!mounted || popping) {
@@ -750,7 +720,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
   @override
   void dispose() {
-    print('fucking disposing!');
     try {
       WidgetsBinding.instance.removeObserver(this);
 
@@ -773,8 +742,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
-    print('state changed');
-    print(state);
     if (state == AppLifecycleState.inactive) {
       if(controller != null) {
         if(isVideoRecording) {
@@ -809,12 +776,11 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
         onSendProgress: (received, total) {
           if (total != -1) {
             uploadingProgress = received / total * 100;
-            print((received / total * 100).toStringAsFixed(0) + '%');
           }
         },
       );
     } catch (e) {
-      print('upload to ipfs failed $e');
+      print(e);
       return '';
     }
 
@@ -823,27 +789,7 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
   }
 
   Future<bool> uploadVideo() async {
-    // curl -v \
-    // -F lat=12 \
-    // -F long=12 \
-    // -F start=123123 \
-    // -F end=123140 \
-    // -F median_direction=12 \
-    // -F signature=test \
-    // -F request_id=test-request-id-1 \
-    // -F expected_hash=QmNT8axScpvoXJeKaoeZcD7E9ew9eSNp4EePXjwB62mrv4 \
-    // -F file=@requirements.in \
-    // https://api.objective.camera/upload/
-
     var url = Uri.https('api.objective.camera', 'upload/');
-    // var request = http.Request("POST", url);
-
-    // request.files.add(
-    //   await http.MultipartFile.fromPath(
-    //     'file',
-    //     video!.path!,
-    //   )
-    // );
     var fields = new Map<String, dynamic>();
 
     fields['lat'] = video!.position.latitude.toString();
@@ -855,7 +801,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
     fields['request_id'] = videoRequest!.requestId;
     fields['expected_hash'] = video!.hash!;
 
-    print('prepared request: ${fields}');
     http.Response response;
 
     try {
@@ -867,8 +812,6 @@ class _RecorderPageState extends State<RecorderPage> with WidgetsBindingObserver
       print(e);
       return false;
     }
-    print(response.statusCode);
-    print(response.body);
 
     return response.statusCode == 200 || response.statusCode == 201;
   }

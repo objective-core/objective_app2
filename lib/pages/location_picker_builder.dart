@@ -192,7 +192,6 @@ class LocationPickerBuilder {
             child: TextButton(
               child: Text('Cancel', textAlign: TextAlign.left, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () {
-                print('pressed cancel, calling callback ${onVideoRequestCancel}');
                 onVideoRequestCancel();
               }
             ),
@@ -205,12 +204,10 @@ class LocationPickerBuilder {
             child: TextButton(
               child: const Text('Submit', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () async {
-                print('Submitting');
                 bool sent = false;
 
                 while(!sent) {
                   sent = await login!.sendTxViaMetamask(videoRequest!);
-                  print('Submitted: $sent');
                   if(sent) {
                     onVideoRequestSent(videoRequest!);
                     break;
@@ -232,7 +229,6 @@ class LocationPickerBuilder {
             child: TextButton(
               child: Text('Confirm Location', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () {
-                print('pressed Confirm why>>');
                 locationConfirmed = true;
                 currentMode = PickerModes.period;
                 onVideoRequestUpdated(videoRequest!);
@@ -246,7 +242,6 @@ class LocationPickerBuilder {
             child: TextButton(
               child: Text('Confirm Time: ${DateFormat('HH:mm').format(calculateSelectedTime(context))}', textAlign: TextAlign.right, style: TextStyle(color: Colors.white, fontSize: 20),),
               onPressed: () {
-                print('pressed Confirm');
                 timeConfirmed = true;
                 currentMode = PickerModes.period;
                 onVideoRequestUpdated(videoRequest!);
@@ -305,7 +300,6 @@ class LocationPickerBuilder {
     DateTime time = calculateSelectedTime(context);
 
     String result =  DateFormat('yyyy/MM/dd HH:mm').format(time);
-    print('selected time: $time, result: $result');
     return result;
   }
 
@@ -590,8 +584,6 @@ class TimePickerCarousel extends StatelessWidget {
         effectiveShift = -(_shift.abs() % (containerWidth / 4));
       }
 
-      print('hoursShift: $hoursShift; shift: $_shift; effectiveShift: $effectiveShift');
-
       // position hours correctly.
       var times = [
         currentTime.subtract(const Duration(hours: 2)).add(Duration(hours: hoursShift)),
@@ -600,7 +592,6 @@ class TimePickerCarousel extends StatelessWidget {
         currentTime.add(const Duration(hours: 1)).add(Duration(hours: hoursShift)),
         currentTime.add(const Duration(hours: 2)).add(Duration(hours: hoursShift)),
       ];
-      print(times);
 
       var letterWidth = 60.0;
       List<Widget> children = [];
@@ -608,12 +599,12 @@ class TimePickerCarousel extends StatelessWidget {
       for(var i = 0; i < 5; i++) {
           DateTime hourDT = times[i];
           int dayDelta = -(currentTime.day - hourDT.day);
-          // print('adding hour $hourDT');
+
           // we can do this cause times are in order
           var defaultPosition = i * containerWidth / 4.0;
           // position of letter after applying shift
           var position = (defaultPosition + effectiveShift - letterWidth / 2.0);
-          // print(position);
+
           if(position >= 0 && position <= containerWidth - letterWidth) {
             children.add(
               Positioned(

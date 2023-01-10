@@ -20,7 +20,6 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    print('url!: ${widget.request.videoUrl}');
     _controller = VideoPlayerController.network(
         widget.request.videoUrl)
       ..initialize().then((_) {

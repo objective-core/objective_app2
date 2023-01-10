@@ -127,7 +127,6 @@ class VideoRequestsManager {
 
     try{
       if(thumbnailById[request.requestId] == null) {
-        print('loading ${request.thumbnail} ${request.requestId}');
         thumbnailById[request.requestId] = await MarkerIcon.downloadResizePictureCircle(
           request.thumbnail,
           size: 150,
@@ -138,7 +137,6 @@ class VideoRequestsManager {
       }
 
       if(activeThumbnailById[request.requestId] == null) {
-        print('loading ${request.thumbnail} ${request.requestId}');
         activeThumbnailById[request.requestId] = await MarkerIcon.downloadResizePictureCircle(
           request.thumbnail,
           size: 150,
@@ -166,15 +164,12 @@ class VideoRequestsManager {
       parameters['radius'] = radius.toString();
       parameters['hide_expired'] = 'true';
       parameters['since_seconds'] = '186400';
-      // parameters['since_seconds'] = '3600';
     }
 
     Response dioResponse = await dio.get(
       'https://api.objective.camera/requests_by_location',
       queryParameters: parameters,
     );
-
-    print(dioResponse.requestOptions.uri);
 
     var requests = dioResponse.data['requests'];
     List<RequestFromServer> result = [];
